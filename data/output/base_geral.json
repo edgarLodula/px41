@@ -1,0 +1,1118 @@
+[
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 0,
+    "disciplina": "Português",
+    "ementa": "Aprimoramento da comunicação escrita e oral para uso no ambiente de saúde.",
+    "conteudo": "Leitura e interpretação de textos técnicos Redação de documentos e relatórios de enfermagem Ortografia e gramática aplicadas Comunicação em equipe multiprofissional Vocabulário técnico da saúde",
+    "texto_embedding": "Português\nAprimoramento da comunicação escrita e oral para uso no ambiente de saúde.\nLeitura e interpretação de textos técnicos Redação de documentos e relatórios de enfermagem Ortografia e gramática aplicadas Comunicação em equipe multiprofissional Vocabulário técnico da saúde"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 1,
+    "disciplina": "Psicologia",
+    "ementa": "Estudo do comportamento humano e suas implicações na assistência à saúde.",
+    "conteudo": "Conceitos básicos de psicologia Desenvolvimento humano Relação paciente-profissional Aspectos psicológicos do adoecimento Técnicas de escuta ativa",
+    "texto_embedding": "Psicologia\nEstudo do comportamento humano e suas implicações na assistência à saúde.\nConceitos básicos de psicologia Desenvolvimento humano Relação paciente-profissional Aspectos psicológicos do adoecimento Técnicas de escuta ativa"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 2,
+    "disciplina": "Ética Profissional",
+    "ementa": "Princípios éticos e legais que norteiam a prática da enfermagem.",
+    "conteudo": "Código de Ética dos Profissionais de Enfermagem Direitos e deveres do profissional Sigilo e confidencialidade Responsabilidade civil e criminal Postura profissional e humanização",
+    "texto_embedding": "Ética Profissional\nPrincípios éticos e legais que norteiam a prática da enfermagem.\nCódigo de Ética dos Profissionais de Enfermagem Direitos e deveres do profissional Sigilo e confidencialidade Responsabilidade civil e criminal Postura profissional e humanização"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 3,
+    "disciplina": "Anatomia e Fisiologia I",
+    "ementa": "Estudo da estrutura e funcionamento do corpo humano com foco nos sistemas básicos.",
+    "conteudo": "Sistema tegumentar Sistema esquelético Sistema muscular Sistema nervoso",
+    "texto_embedding": "Anatomia e Fisiologia I\nEstudo da estrutura e funcionamento do corpo humano com foco nos sistemas básicos.\nSistema tegumentar Sistema esquelético Sistema muscular Sistema nervoso"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 4,
+    "disciplina": "Anatomia e Fisiologia II",
+    "ementa": "Continuação do estudo do corpo humano com foco em sistemas vitais.",
+    "conteudo": "Sistema cardiovascular Sistema respiratório Sistema digestório Sistema urinário Sistema reprodutor",
+    "texto_embedding": "Anatomia e Fisiologia II\nContinuação do estudo do corpo humano com foco em sistemas vitais.\nSistema cardiovascular Sistema respiratório Sistema digestório Sistema urinário Sistema reprodutor"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 5,
+    "disciplina": "Microbiologia e Parasitologia",
+    "ementa": "Estudo dos microrganismos e parasitas de importância médica.",
+    "conteudo": "Classificação dos microrganismos Principais parasitoses Métodos de controle e prevenção Noções de biossegurança",
+    "texto_embedding": "Microbiologia e Parasitologia\nEstudo dos microrganismos e parasitas de importância médica.\nClassificação dos microrganismos Principais parasitoses Métodos de controle e prevenção Noções de biossegurança"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 6,
+    "disciplina": "Fundamentos da Saúde",
+    "ementa": "Conceitos e práticas para promoção, prevenção e recuperação da saúde.",
+    "conteudo": "Níveis de atenção à saúde Prevenção de doenças e promoção da saúde Indicadores de saúde",
+    "texto_embedding": "Fundamentos da Saúde\nConceitos e práticas para promoção, prevenção e recuperação da saúde.\nNíveis de atenção à saúde Prevenção de doenças e promoção da saúde Indicadores de saúde"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 7,
+    "disciplina": "Fundamentos da Enfermagem I",
+    "ementa": "Princípios básicos da prática de enfermagem e assistência ao paciente.",
+    "conteudo": "Higiene e conforto do paciente Controle de sinais vitais Administração de medicamentos Coleta de material para exames Prevenção de infecções",
+    "texto_embedding": "Fundamentos da Enfermagem I\nPrincípios básicos da prática de enfermagem e assistência ao paciente.\nHigiene e conforto do paciente Controle de sinais vitais Administração de medicamentos Coleta de material para exames Prevenção de infecções"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 8,
+    "disciplina": "Fundamentos da Enfermagem II",
+    "ementa": "Aprofundamento das técnicas de enfermagem e cuidados especializados.",
+    "conteudo": "Curativos e cuidados com feridas Assistência ao paciente acamado Técnicas de imobilização Preparo para exames e cirurgias Monitoramento clínico",
+    "texto_embedding": "Fundamentos da Enfermagem II\nAprofundamento das técnicas de enfermagem e cuidados especializados.\nCurativos e cuidados com feridas Assistência ao paciente acamado Técnicas de imobilização Preparo para exames e cirurgias Monitoramento clínico"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 9,
+    "disciplina": "Enfermagem e Saúde Coletiva",
+    "ementa": "Atuação da enfermagem na atenção básica e em programas de saúde pública.",
+    "conteudo": "Organização da atenção básica Vacinação e imunização Ações de prevenção e educação em saúde Vigilância epidemiológica Atendimento em campanhas de saúde",
+    "texto_embedding": "Enfermagem e Saúde Coletiva\nAtuação da enfermagem na atenção básica e em programas de saúde pública.\nOrganização da atenção básica Vacinação e imunização Ações de prevenção e educação em saúde Vigilância epidemiológica Atendimento em campanhas de saúde"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 10,
+    "disciplina": "Enfermagem Materno Infantil",
+    "ementa": "Assistência de enfermagem à saúde da mulher, gestante, criança e recém-nascido.",
+    "conteudo": "Pré-natal e puerpério Atenção ao parto e pós-parto Aleitamento materno Cuidados com o recém-nascido Doenças comuns na infância",
+    "texto_embedding": "Enfermagem Materno Infantil\nAssistência de enfermagem à saúde da mulher, gestante, criança e recém-nascido.\nPré-natal e puerpério Atenção ao parto e pós-parto Aleitamento materno Cuidados com o recém-nascido Doenças comuns na infância"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 11,
+    "disciplina": "Enfermagem nas Intercorrências Clínicas",
+    "ementa": "Assistência ao paciente em situações clínicas emergenciais.",
+    "conteudo": "Atendimento inicial ao paciente Reconhecimento de sinais de gravidade Suporte básico de vida Administração de medicamentos em urgência Comunicação com equipe de emergência",
+    "texto_embedding": "Enfermagem nas Intercorrências Clínicas\nAssistência ao paciente em situações clínicas emergenciais.\nAtendimento inicial ao paciente Reconhecimento de sinais de gravidade Suporte básico de vida Administração de medicamentos em urgência Comunicação com equipe de emergência"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 12,
+    "disciplina": "Enfermagem nas Intercorrências Cirúrgicas",
+    "ementa": "Cuidados pré, trans e pós-operatórios.",
+    "conteudo": "Preparo do paciente para cirurgia Instrumentação cirúrgica Cuidados na recuperação anestésica Controle de infecções no centro cirúrgico Assistência no pós-operatório",
+    "texto_embedding": "Enfermagem nas Intercorrências Cirúrgicas\nCuidados pré, trans e pós-operatórios.\nPreparo do paciente para cirurgia Instrumentação cirúrgica Cuidados na recuperação anestésica Controle de infecções no centro cirúrgico Assistência no pós-operatório"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 13,
+    "disciplina": "Enfermagem em Saúde Mental e Psiquiátrica",
+    "ementa": "Cuidados de enfermagem em saúde mental e atenção psicossocial.",
+    "conteudo": "Transtornos mentais mais comuns Abordagem terapêutica Atuação em CAPS e instituições psiquiátricas",
+    "texto_embedding": "Enfermagem em Saúde Mental e Psiquiátrica\nCuidados de enfermagem em saúde mental e atenção psicossocial.\nTranstornos mentais mais comuns Abordagem terapêutica Atuação em CAPS e instituições psiquiátricas"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 14,
+    "disciplina": "Enfermagem na Assistência a Pacientes em Estado Grave",
+    "ementa": "Atendimento a pacientes em unidades de terapia intensiva.",
+    "conteudo": "Monitoramento contínuo Uso de equipamentos de suporte avançado Administração de medicamentos de alta complexidade Assistência ventilatória Registro e evolução do paciente crítico",
+    "texto_embedding": "Enfermagem na Assistência a Pacientes em Estado Grave\nAtendimento a pacientes em unidades de terapia intensiva.\nMonitoramento contínuo Uso de equipamentos de suporte avançado Administração de medicamentos de alta complexidade Assistência ventilatória Registro e evolução do paciente crítico"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 15,
+    "disciplina": "Administração de Unidades de Enfermagem",
+    "ementa": "Gestão e organização de serviços de enfermagem.",
+    "conteudo": "Dimensionamento de pessoal Escalas de trabalho Controle de materiais e medicamentos Normas e rotinas Avaliação de desempenho da equipe",
+    "texto_embedding": "Administração de Unidades de Enfermagem\nGestão e organização de serviços de enfermagem.\nDimensionamento de pessoal Escalas de trabalho Controle de materiais e medicamentos Normas e rotinas Avaliação de desempenho da equipe"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 16,
+    "disciplina": "Matemática Aplicada",
+    "ementa": "Aplicação de conceitos matemáticos em cálculos de enfermagem.",
+    "conteudo": "Regra de três simples e composta Porcentagem e proporção Cálculo de doses de medicamentos Conversão de unidades Cálculos de gotejamento",
+    "texto_embedding": "Matemática Aplicada\nAplicação de conceitos matemáticos em cálculos de enfermagem.\nRegra de três simples e composta Porcentagem e proporção Cálculo de doses de medicamentos Conversão de unidades Cálculos de gotejamento"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 17,
+    "disciplina": "Método de Pesquisa",
+    "ementa": "Metodologias científicas aplicadas à área da saúde.",
+    "conteudo": "Etapas do método científico Tipos de pesquisa em saúde Coleta e análise de dados Estrutura de trabalhos acadêmicos Normas da ABNT",
+    "texto_embedding": "Método de Pesquisa\nMetodologias científicas aplicadas à área da saúde.\nEtapas do método científico Tipos de pesquisa em saúde Coleta e análise de dados Estrutura de trabalhos acadêmicos Normas da ABNT"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 18,
+    "disciplina": "Prática Profissional e Atendimento Básico à Saúde",
+    "ementa": "Atividades práticas supervisionadas em serviços de saúde.",
+    "conteudo": "Atendimento a diferentes públicos Aplicação de protocolos clínicos Registro de informações no prontuário Acompanhamento de procedimentos Apoio em campanhas e ações de saúde",
+    "texto_embedding": "Prática Profissional e Atendimento Básico à Saúde\nAtividades práticas supervisionadas em serviços de saúde.\nAtendimento a diferentes públicos Aplicação de protocolos clínicos Registro de informações no prontuário Acompanhamento de procedimentos Apoio em campanhas e ações de saúde"
+  },
+  {
+    "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 19,
+    "disciplina": "Letramento Digital",
+    "ementa": "Uso de ferramentas digitais no contexto da enfermagem.",
+    "conteudo": "Introdução à informática em saúde Sistemas de prontuário eletrônico Busca de informações científicas online Segurança e ética no uso de dados Ferramentas colaborativas",
+    "texto_embedding": "Letramento Digital\nUso de ferramentas digitais no contexto da enfermagem.\nIntrodução à informática em saúde Sistemas de prontuário eletrônico Busca de informações científicas online Segurança e ética no uso de dados Ferramentas colaborativas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 0,
+    "disciplina": "Introdução à Administração",
+    "ementa": "Apresenta a evolução histórica da Administração, suas funções básicas, princípios e o papel do administrador nas organizações.",
+    "conteudo": "Origem e evolução da Administração Principais teorias administrativas Funções da Administração: planejar, organizar, dirigir e controlar Estruturas organizacionais O papel e as habilidades do administrador",
+    "texto_embedding": "Introdução à Administração\nApresenta a evolução histórica da Administração, suas funções básicas, princípios e o papel do administrador nas organizações.\nOrigem e evolução da Administração Principais teorias administrativas Funções da Administração: planejar, organizar, dirigir e controlar Estruturas organizacionais O papel e as habilidades do administrador"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 1,
+    "disciplina": "Administração Contemporânea",
+    "ementa": "Estudo das tendências modernas de gestão e dos novos modelos organizacionais voltados para competitividade e inovação.",
+    "conteudo": "Mudanças no ambiente empresarial Modelos de gestão contemporâneos Cultura organizacional e gestão de mudanças Liderança transformacional Inovação como diferencial competitivo",
+    "texto_embedding": "Administração Contemporânea\nEstudo das tendências modernas de gestão e dos novos modelos organizacionais voltados para competitividade e inovação.\nMudanças no ambiente empresarial Modelos de gestão contemporâneos Cultura organizacional e gestão de mudanças Liderança transformacional Inovação como diferencial competitivo"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 2,
+    "disciplina": "Administração de Recursos Humanos",
+    "ementa": "Estudo das políticas e práticas de gestão de pessoas, visando a atração, desenvolvimento e retenção de talentos.",
+    "conteudo": "Planejamento de recursos humanos Recrutamento e seleção Treinamento e desenvolvimento Avaliação de desempenho Cargos, salários e benefícios",
+    "texto_embedding": "Administração de Recursos Humanos\nEstudo das políticas e práticas de gestão de pessoas, visando a atração, desenvolvimento e retenção de talentos.\nPlanejamento de recursos humanos Recrutamento e seleção Treinamento e desenvolvimento Avaliação de desempenho Cargos, salários e benefícios"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 3,
+    "disciplina": "Matemática Básica",
+    "ementa": "Revisão de conceitos matemáticos fundamentais aplicados à administração e à resolução de problemas do cotidiano empresarial.",
+    "conteudo": "Operações básicas Frações e porcentagens Regra de três simples e composta Equações de 1º e 2º grau Aplicações em finanças e estoques",
+    "texto_embedding": "Matemática Básica\nRevisão de conceitos matemáticos fundamentais aplicados à administração e à resolução de problemas do cotidiano empresarial.\nOperações básicas Frações e porcentagens Regra de três simples e composta Equações de 1º e 2º grau Aplicações em finanças e estoques"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 4,
+    "disciplina": "Produção de Estoque",
+    "ementa": "Planejamento, controle e gestão de estoques, com foco em eficiência operacional e redução de custos.",
+    "conteudo": "Tipos de estoque Sistemas de controle (FIFO, LIFO) Inventário físico e rotativo Níveis de estoque: mínimo, máximo e de segurança Ferramentas informatizadas de gestão de estoque",
+    "texto_embedding": "Produção de Estoque\nPlanejamento, controle e gestão de estoques, com foco em eficiência operacional e redução de custos.\nTipos de estoque Sistemas de controle (FIFO, LIFO) Inventário físico e rotativo Níveis de estoque: mínimo, máximo e de segurança Ferramentas informatizadas de gestão de estoque"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 5,
+    "disciplina": "Marketing",
+    "ementa": "Conceitos e estratégias de marketing para posicionamento competitivo e atendimento às necessidades do consumidor.",
+    "conteudo": "Composto mercadológico (4Ps) Comportamento do consumidor Pesquisa de mercado Posicionamento e diferenciação Marketing digital e redes sociais",
+    "texto_embedding": "Marketing\nConceitos e estratégias de marketing para posicionamento competitivo e atendimento às necessidades do consumidor.\nComposto mercadológico (4Ps) Comportamento do consumidor Pesquisa de mercado Posicionamento e diferenciação Marketing digital e redes sociais"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 6,
+    "disciplina": "Português Instrumental",
+    "ementa": "Desenvolvimento da comunicação escrita e leitura crítica, voltadas para a produção de textos técnicos e administrativos.",
+    "conteudo": "Leitura e interpretação de textos Ortografia e pontuação Redação de textos administrativos Técnicas de síntese",
+    "texto_embedding": "Português Instrumental\nDesenvolvimento da comunicação escrita e leitura crítica, voltadas para a produção de textos técnicos e administrativos.\nLeitura e interpretação de textos Ortografia e pontuação Redação de textos administrativos Técnicas de síntese"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 7,
+    "disciplina": "Contabilidade Básica",
+    "ementa": "Fundamentos da contabilidade e suas aplicações na gestão de empresas, incluindo registros e demonstrações contábeis.",
+    "conteudo": "Patrimônio e suas variações Plano de contas Escrituração contábil Balancete de verificação Balanço patrimonial e DRE",
+    "texto_embedding": "Contabilidade Básica\nFundamentos da contabilidade e suas aplicações na gestão de empresas, incluindo registros e demonstrações contábeis.\nPatrimônio e suas variações Plano de contas Escrituração contábil Balancete de verificação Balanço patrimonial e DRE"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 8,
+    "disciplina": "Relações Pessoais e Liderança",
+    "ementa": "Estudo das habilidades interpessoais e do papel da liderança no ambiente organizacional.",
+    "conteudo": "Comunicação interpessoal Trabalho em equipe Estilos de liderança Motivação e engajamento Gestão de clima organizacional",
+    "texto_embedding": "Relações Pessoais e Liderança\nEstudo das habilidades interpessoais e do papel da liderança no ambiente organizacional.\nComunicação interpessoal Trabalho em equipe Estilos de liderança Motivação e engajamento Gestão de clima organizacional"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 9,
+    "disciplina": "Direito e Legislação",
+    "ementa": "Aspectos jurídicos aplicáveis à administração, com foco em direito empresarial e trabalhista.",
+    "conteudo": "Noções básicas de direito Direito empresarial Direito trabalhista Contratos e jornada de trabalho Noções de direito tributário",
+    "texto_embedding": "Direito e Legislação\nAspectos jurídicos aplicáveis à administração, com foco em direito empresarial e trabalhista.\nNoções básicas de direito Direito empresarial Direito trabalhista Contratos e jornada de trabalho Noções de direito tributário"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 10,
+    "disciplina": "Introdução à Estatística",
+    "ementa": "Conceitos básicos de estatística aplicados à análise e interpretação de dados.",
+    "conteudo": "População e amostra Distribuição de frequências Medidas de tendência central Medidas de dispersão Representação gráfica de dados",
+    "texto_embedding": "Introdução à Estatística\nConceitos básicos de estatística aplicados à análise e interpretação de dados.\nPopulação e amostra Distribuição de frequências Medidas de tendência central Medidas de dispersão Representação gráfica de dados"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 11,
+    "disciplina": "Contabilidade e Custo",
+    "ementa": "Estudo da contabilidade de custos e sua aplicação no controle e planejamento empresarial.",
+    "conteudo": "Classificação de custos Custos fixos e variáveis Sistemas de custeio Margem de contribuição Ponto de equilíbrio",
+    "texto_embedding": "Contabilidade e Custo\nEstudo da contabilidade de custos e sua aplicação no controle e planejamento empresarial.\nClassificação de custos Custos fixos e variáveis Sistemas de custeio Margem de contribuição Ponto de equilíbrio"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 12,
+    "disciplina": "Matemática Financeira",
+    "ementa": "Aplicação de conceitos matemáticos à análise de operações financeiras.",
+    "conteudo": "Juros simples e compostos Descontos Taxas equivalentes Sistemas de amortização Valor presente e futuro",
+    "texto_embedding": "Matemática Financeira\nAplicação de conceitos matemáticos à análise de operações financeiras.\nJuros simples e compostos Descontos Taxas equivalentes Sistemas de amortização Valor presente e futuro"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 13,
+    "disciplina": "Gestão Empresarial",
+    "ementa": "Princípios e práticas da gestão integrada das áreas de uma organização.",
+    "conteudo": "Planejamento estratégico Gestão de processos Estrutura organizacional Tomada de decisão Indicadores de desempenho",
+    "texto_embedding": "Gestão Empresarial\nPrincípios e práticas da gestão integrada das áreas de uma organização.\nPlanejamento estratégico Gestão de processos Estrutura organizacional Tomada de decisão Indicadores de desempenho"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 14,
+    "disciplina": "Informática",
+    "ementa": "Utilização de ferramentas de informática aplicadas ao ambiente empresarial.",
+    "conteudo": "Pacote Office aplicado à gestão Planilhas eletrônicas Noções de redes e internet Segurança da informação",
+    "texto_embedding": "Informática\nUtilização de ferramentas de informática aplicadas ao ambiente empresarial.\nPacote Office aplicado à gestão Planilhas eletrônicas Noções de redes e internet Segurança da informação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 15,
+    "disciplina": "Estatística Aplicada",
+    "ementa": "Aplicação de métodos estatísticos à tomada de decisão empresarial.",
+    "conteudo": "Análise de séries temporais Correlação e regressão",
+    "texto_embedding": "Estatística Aplicada\nAplicação de métodos estatísticos à tomada de decisão empresarial.\nAnálise de séries temporais Correlação e regressão"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Administracao.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 16,
+    "disciplina": "Método de Pesquisa",
+    "ementa": "Metodologias científicas aplicadas à elaboração de trabalhos acadêmicos e técnicos.",
+    "conteudo": "Tipos de pesquisa Etapas do método científico Coleta e análise de dados Estrutura de trabalhos acadêmicos Normas da ABNT",
+    "texto_embedding": "Método de Pesquisa\nMetodologias científicas aplicadas à elaboração de trabalhos acadêmicos e técnicos.\nTipos de pesquisa Etapas do método científico Coleta e análise de dados Estrutura de trabalhos acadêmicos Normas da ABNT"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 0,
+    "disciplina": "Gestão e Qualidade",
+    "ementa": "Princípios, métodos e ferramentas para gestão da qualidade em processos industriais.",
+    "conteudo": "Fundamentos da gestão da qualidade Normas ISO e certificações Controle estatístico de processos Ferramentas da qualidade Indicadores de desempenho e melhoria contínua",
+    "texto_embedding": "Gestão e Qualidade\nPrincípios, métodos e ferramentas para gestão da qualidade em processos industriais.\nFundamentos da gestão da qualidade Normas ISO e certificações Controle estatístico de processos Ferramentas da qualidade Indicadores de desempenho e melhoria contínua"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 1,
+    "disciplina": "Eletrônica",
+    "ementa": "Conceitos fundamentais da eletrônica e suas aplicações em sistemas eletromecânicos.",
+    "conteudo": "Grandezas e leis elétricas Componentes eletrônicos passivos e ativos Circuitos elétricos e eletrônicos Medições elétricas e instrumentos Aplicações em sistemas industriais",
+    "texto_embedding": "Eletrônica\nConceitos fundamentais da eletrônica e suas aplicações em sistemas eletromecânicos.\nGrandezas e leis elétricas Componentes eletrônicos passivos e ativos Circuitos elétricos e eletrônicos Medições elétricas e instrumentos Aplicações em sistemas industriais"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 2,
+    "disciplina": "Hidráulica e Pneumática",
+    "ementa": "Estudo dos princípios e aplicações de sistemas hidráulicos e pneumáticos na indústria.",
+    "conteudo": "Propriedades dos fluidos Componentes hidráulicos e pneumáticos Circuitos e simbologia Manutenção e diagnóstico de falhas Normas de segurança aplicáveis",
+    "texto_embedding": "Hidráulica e Pneumática\nEstudo dos princípios e aplicações de sistemas hidráulicos e pneumáticos na indústria.\nPropriedades dos fluidos Componentes hidráulicos e pneumáticos Circuitos e simbologia Manutenção e diagnóstico de falhas Normas de segurança aplicáveis"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 3,
+    "disciplina": "Controlador Lógico Programável",
+    "ementa": "Configuração, programação e aplicação de CLPs em automação industrial.",
+    "conteudo": "Arquitetura de CLPs Linguagens de programação (Ladder, Lista de Instruções) Sensores e atuadores Integração com sistemas supervisórios Projetos práticos de automação",
+    "texto_embedding": "Controlador Lógico Programável\nConfiguração, programação e aplicação de CLPs em automação industrial.\nArquitetura de CLPs Linguagens de programação (Ladder, Lista de Instruções) Sensores e atuadores Integração com sistemas supervisórios Projetos práticos de automação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 4,
+    "disciplina": "Saúde e Segurança do Trabalho",
+    "ementa": "Normas e práticas de segurança aplicadas a ambientes industriais.",
+    "conteudo": "Normas regulamentadoras (NRs) Análise e prevenção de riscos EPIs e EPCs Prevenção e combate a incêndios Primeiros socorros",
+    "texto_embedding": "Saúde e Segurança do Trabalho\nNormas e práticas de segurança aplicadas a ambientes industriais.\nNormas regulamentadoras (NRs) Análise e prevenção de riscos EPIs e EPCs Prevenção e combate a incêndios Primeiros socorros"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 5,
+    "disciplina": "Desenho Técnico",
+    "ementa": "Interpretação e elaboração de desenhos técnicos mecânicos e elétricos.",
+    "conteudo": "Normas técnicas de desenho Leitura e interpretação de vistas e cortes Simbologia elétrica e mecânica Escalas e cotagem Desenho assistido por computador",
+    "texto_embedding": "Desenho Técnico\nInterpretação e elaboração de desenhos técnicos mecânicos e elétricos.\nNormas técnicas de desenho Leitura e interpretação de vistas e cortes Simbologia elétrica e mecânica Escalas e cotagem Desenho assistido por computador"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 6,
+    "disciplina": "Inovação e Empreendedorismo",
+    "ementa": "Desenvolvimento de habilidades empreendedoras e estímulo à inovação no setor industrial.",
+    "conteudo": "Conceitos de inovação e empreendedorismo Modelos de negócios Propriedade intelectual e patentes Captação de recursos e investimentos Estudos de caso de inovação",
+    "texto_embedding": "Inovação e Empreendedorismo\nDesenvolvimento de habilidades empreendedoras e estímulo à inovação no setor industrial.\nConceitos de inovação e empreendedorismo Modelos de negócios Propriedade intelectual e patentes Captação de recursos e investimentos Estudos de caso de inovação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 7,
+    "disciplina": "Fundamentos da Comunicação Oral e Escrita",
+    "ementa": "Desenvolvimento de habilidades de comunicação oral e escrita aplicadas ao contexto técnico.",
+    "conteudo": "Técnicas de expressão oral Redação técnica Relatórios e documentação técnica Apresentações eficazes Comunicação em equipes de trabalho",
+    "texto_embedding": "Fundamentos da Comunicação Oral e Escrita\nDesenvolvimento de habilidades de comunicação oral e escrita aplicadas ao contexto técnico.\nTécnicas de expressão oral Redação técnica Relatórios e documentação técnica Apresentações eficazes Comunicação em equipes de trabalho"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 8,
+    "disciplina": "Materiais de Construção Mecânica",
+    "ementa": "Estudo das propriedades e aplicações de materiais utilizados na construção mecânica.",
+    "conteudo": "Classificação e propriedades dos materiais Metais ferrosos e não ferrosos Polímeros, cerâmicas e compósitos Tratamentos térmicos Critérios de seleção de materiais",
+    "texto_embedding": "Materiais de Construção Mecânica\nEstudo das propriedades e aplicações de materiais utilizados na construção mecânica.\nClassificação e propriedades dos materiais Metais ferrosos e não ferrosos Polímeros, cerâmicas e compósitos Tratamentos térmicos Critérios de seleção de materiais"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 9,
+    "disciplina": "Elementos da Máquina I",
+    "ementa": "Análise e aplicação dos principais elementos de máquinas.",
+    "conteudo": "Eixos, mancais e rolamentos Engrenagens e acoplamentos Parafusos e uniões Molas e juntas Critérios de dimensionamento",
+    "texto_embedding": "Elementos da Máquina I\nAnálise e aplicação dos principais elementos de máquinas.\nEixos, mancais e rolamentos Engrenagens e acoplamentos Parafusos e uniões Molas e juntas Critérios de dimensionamento"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 10,
+    "disciplina": "Fundamentos da Eletricidade Industrial",
+    "ementa": "Estudo dos sistemas elétricos industriais e seus componentes.",
+    "conteudo": "Leis elétricas aplicadas Instalações elétricas industriais Máquinas e equipamentos elétricos Dispositivos de proteção e manobra Manutenção e segurança",
+    "texto_embedding": "Fundamentos da Eletricidade Industrial\nEstudo dos sistemas elétricos industriais e seus componentes.\nLeis elétricas aplicadas Instalações elétricas industriais Máquinas e equipamentos elétricos Dispositivos de proteção e manobra Manutenção e segurança"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 11,
+    "disciplina": "Metrologia Dimensional",
+    "ementa": "Técnicas e instrumentos de medição aplicados à indústria.",
+    "conteudo": "Conceitos de metrologia Instrumentos de medição linear e angular Calibração e tolerâncias Controle dimensional Interpretação de resultados",
+    "texto_embedding": "Metrologia Dimensional\nTécnicas e instrumentos de medição aplicados à indústria.\nConceitos de metrologia Instrumentos de medição linear e angular Calibração e tolerâncias Controle dimensional Interpretação de resultados"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 12,
+    "disciplina": "Usinagem Aplicada à Manutenção e Montagem",
+    "ementa": "Processos de usinagem aplicados à manutenção e montagem industrial.",
+    "conteudo": "Torneamento, fresamento e furação Ferramentas de corte Parâmetros de usinagem Segurança na operação de máquinas Controle dimensional em peças usinadas",
+    "texto_embedding": "Usinagem Aplicada à Manutenção e Montagem\nProcessos de usinagem aplicados à manutenção e montagem industrial.\nTorneamento, fresamento e furação Ferramentas de corte Parâmetros de usinagem Segurança na operação de máquinas Controle dimensional em peças usinadas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 13,
+    "disciplina": "Instalações Elétricas Prediais",
+    "ementa": "Planejamento e execução de instalações elétricas em edificações.",
+    "conteudo": "Normas e regulamentações Dimensionamento de circuitos",
+    "texto_embedding": "Instalações Elétricas Prediais\nPlanejamento e execução de instalações elétricas em edificações.\nNormas e regulamentações Dimensionamento de circuitos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 14,
+    "disciplina": "Fundamentos da Gestão da Manutenção",
+    "ementa": "Planejamento e controle das atividades de manutenção industrial.",
+    "conteudo": "Tipos de manutenção Planejamento e programação Controle de custos Indicadores de desempenho Ferramentas de gestão da manutenção",
+    "texto_embedding": "Fundamentos da Gestão da Manutenção\nPlanejamento e controle das atividades de manutenção industrial.\nTipos de manutenção Planejamento e programação Controle de custos Indicadores de desempenho Ferramentas de gestão da manutenção"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 15,
+    "disciplina": "Elementos de Máquinas II",
+    "ementa": "Continuação do estudo dos elementos de máquinas com foco em aplicações complexas.",
+    "conteudo": "Transmissões por correia e corrente Sistemas de freios e embreagens Ajustes e tolerâncias Lubrificação de elementos mecânicos Estudos de falhas",
+    "texto_embedding": "Elementos de Máquinas II\nContinuação do estudo dos elementos de máquinas com foco em aplicações complexas.\nTransmissões por correia e corrente Sistemas de freios e embreagens Ajustes e tolerâncias Lubrificação de elementos mecânicos Estudos de falhas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 16,
+    "disciplina": "Lubrificação e Ajustagem",
+    "ementa": "Técnicas de lubrificação e ajustes mecânicos aplicados à manutenção.",
+    "conteudo": "Tipos de lubrificantes Sistemas de lubrificação Técnicas de ajuste de componentes Prevenção de desgaste Segurança na lubrificação",
+    "texto_embedding": "Lubrificação e Ajustagem\nTécnicas de lubrificação e ajustes mecânicos aplicados à manutenção.\nTipos de lubrificantes Sistemas de lubrificação Técnicas de ajuste de componentes Prevenção de desgaste Segurança na lubrificação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 17,
+    "disciplina": "Acionamento de Motores",
+    "ementa": "Sistemas e métodos de acionamento de motores elétricos.",
+    "conteudo": "Tipos de motores elétricos Partida direta e indireta Controle de velocidade Proteção de motores Manutenção preventiva e corretiva",
+    "texto_embedding": "Acionamento de Motores\nSistemas e métodos de acionamento de motores elétricos.\nTipos de motores elétricos Partida direta e indireta Controle de velocidade Proteção de motores Manutenção preventiva e corretiva"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 18,
+    "disciplina": "Comandos Elétricos",
+    "ementa": "Estudo de circuitos e dispositivos de comando elétrico.",
+    "conteudo": "Simbologia e diagramas elétricos Dispositivos de manobra e proteção Montagem de painéis elétricos Lógica de comando Testes e diagnóstico",
+    "texto_embedding": "Comandos Elétricos\nEstudo de circuitos e dispositivos de comando elétrico.\nSimbologia e diagramas elétricos Dispositivos de manobra e proteção Montagem de painéis elétricos Lógica de comando Testes e diagnóstico"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 19,
+    "disciplina": "Autocad",
+    "ementa": "Utilização do software AutoCAD para elaboração de projetos elétricos e mecânicos.",
+    "conteudo": "Interface e comandos básicos Criação e edição de desenhos Camadas e blocos Cotagem e anotações Impressão e exportação de projetos",
+    "texto_embedding": "Autocad\nUtilização do software AutoCAD para elaboração de projetos elétricos e mecânicos.\nInterface e comandos básicos Criação e edição de desenhos Camadas e blocos Cotagem e anotações Impressão e exportação de projetos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 20,
+    "disciplina": "Máquinas Elétricas",
+    "ementa": "Funcionamento, características e aplicações de máquinas elétricas.",
+    "conteudo": "Transformadores: tipos e funcionamento Geradores e motores Perdas e rendimento Ensaios e manutenção Aplicações industriais",
+    "texto_embedding": "Máquinas Elétricas\nFuncionamento, características e aplicações de máquinas elétricas.\nTransformadores: tipos e funcionamento Geradores e motores Perdas e rendimento Ensaios e manutenção Aplicações industriais"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 0,
+    "disciplina": "Informática Básica",
+    "ementa": "Fundamentos de informática e uso de ferramentas digitais aplicadas à área eletrotécnica.",
+    "conteudo": "Sistemas operacionais e gerenciamento de arquivos Pacote Office Navegação segura na internet Softwares de projetos elétricos Segurança da informação",
+    "texto_embedding": "Informática Básica\nFundamentos de informática e uso de ferramentas digitais aplicadas à área eletrotécnica.\nSistemas operacionais e gerenciamento de arquivos Pacote Office Navegação segura na internet Softwares de projetos elétricos Segurança da informação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 1,
+    "disciplina": "Inglês Técnico",
+    "ementa": "Vocabulário e leitura de textos técnicos em inglês aplicados à eletrotécnica.",
+    "conteudo": "Vocabulário técnico de elétrica e eletrônica Leitura e interpretação de manuais Tradução de especificações e catálogos Expressões em diagramas e esquemas Leitura de artigos técnicos",
+    "texto_embedding": "Inglês Técnico\nVocabulário e leitura de textos técnicos em inglês aplicados à eletrotécnica.\nVocabulário técnico de elétrica e eletrônica Leitura e interpretação de manuais Tradução de especificações e catálogos Expressões em diagramas e esquemas Leitura de artigos técnicos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 2,
+    "disciplina": "Desenho Técnico",
+    "ementa": "Elaboração e interpretação de desenhos técnicos e diagramas elétricos.",
+    "conteudo": "Normas de desenho técnico Escalas, cortes e vistas Simbologia elétrica e eletrônica Diagramas unifilares e multifilares Softwares de desenho assistido",
+    "texto_embedding": "Desenho Técnico\nElaboração e interpretação de desenhos técnicos e diagramas elétricos.\nNormas de desenho técnico Escalas, cortes e vistas Simbologia elétrica e eletrônica Diagramas unifilares e multifilares Softwares de desenho assistido"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 3,
+    "disciplina": "Eletricidade I",
+    "ementa": "Fundamentos da eletricidade e suas aplicações práticas.",
+    "conteudo": "Grandezas e leis elétricas Componentes e circuitos elétricos Medições elétricas Associação de resistores, capacitores e indutores Segurança em instalações elétricas",
+    "texto_embedding": "Eletricidade I\nFundamentos da eletricidade e suas aplicações práticas.\nGrandezas e leis elétricas Componentes e circuitos elétricos Medições elétricas Associação de resistores, capacitores e indutores Segurança em instalações elétricas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 4,
+    "disciplina": "Eletricidade II",
+    "ementa": "Estudo avançado da eletricidade com foco em aplicações industriais.",
+    "conteudo": "Circuitos trifásicos Potência ativa, reativa e aparente Fator de potência e correção Dispositivos de proteção Ensaios e diagnósticos elétricos",
+    "texto_embedding": "Eletricidade II\nEstudo avançado da eletricidade com foco em aplicações industriais.\nCircuitos trifásicos Potência ativa, reativa e aparente Fator de potência e correção Dispositivos de proteção Ensaios e diagnósticos elétricos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 5,
+    "disciplina": "Eletrônica Digital I",
+    "ementa": "Fundamentos da eletrônica digital aplicados a sistemas eletrotécnicos.",
+    "conteudo": "Sistemas de numeração Portas lógicas Flip-flops e contadores Conversores A/D e D/A Aplicações industriais",
+    "texto_embedding": "Eletrônica Digital I\nFundamentos da eletrônica digital aplicados a sistemas eletrotécnicos.\nSistemas de numeração Portas lógicas Flip-flops e contadores Conversores A/D e D/A Aplicações industriais"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 6,
+    "disciplina": "Eletrônica Digital II",
+    "ementa": "Aprofundamento da eletrônica digital e suas aplicações.",
+    "conteudo": "Circuitos sequenciais avançados Memórias e microprocessadores Interfaces de comunicação",
+    "texto_embedding": "Eletrônica Digital II\nAprofundamento da eletrônica digital e suas aplicações.\nCircuitos sequenciais avançados Memórias e microprocessadores Interfaces de comunicação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 7,
+    "disciplina": "Eletrônica Linear I",
+    "ementa": "Estudo da eletrônica analógica e dispositivos semicondutores.",
+    "conteudo": "Diodos e retificadores Transistores Fontes de alimentação Amplificadores operacionais Circuitos de filtragem",
+    "texto_embedding": "Eletrônica Linear I\nEstudo da eletrônica analógica e dispositivos semicondutores.\nDiodos e retificadores Transistores Fontes de alimentação Amplificadores operacionais Circuitos de filtragem"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 8,
+    "disciplina": "Eletrônica Linear II",
+    "ementa": "Circuitos lineares aplicados a sistemas de controle e potência.",
+    "conteudo": "Amplificadores de potência Osciladores Conversores AC/DC e DC/DC Fontes chaveadas Proteção de circuitos",
+    "texto_embedding": "Eletrônica Linear II\nCircuitos lineares aplicados a sistemas de controle e potência.\nAmplificadores de potência Osciladores Conversores AC/DC e DC/DC Fontes chaveadas Proteção de circuitos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 9,
+    "disciplina": "Instalações Elétricas I",
+    "ementa": "Planejamento e execução de instalações elétricas de baixa tensão.",
+    "conteudo": "Normas NBR 5410 Dimensionamento de condutores Dispositivos de proteção Sistemas de aterramento Execução e inspeção de instalações",
+    "texto_embedding": "Instalações Elétricas I\nPlanejamento e execução de instalações elétricas de baixa tensão.\nNormas NBR 5410 Dimensionamento de condutores Dispositivos de proteção Sistemas de aterramento Execução e inspeção de instalações"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 10,
+    "disciplina": "Instalações Elétricas II",
+    "ementa": "Projetos e manutenção de instalações elétricas industriais.",
+    "conteudo": "Quadros de distribuição Circuitos de força e comando Dispositivos de automação Proteção contra surtos Manutenção preditiva e corretiva",
+    "texto_embedding": "Instalações Elétricas II\nProjetos e manutenção de instalações elétricas industriais.\nQuadros de distribuição Circuitos de força e comando Dispositivos de automação Proteção contra surtos Manutenção preditiva e corretiva"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 11,
+    "disciplina": "Telecomunicações I",
+    "ementa": "Fundamentos e tecnologias básicas de telecomunicações aplicadas à eletrotécnica.",
+    "conteudo": "Princípios de transmissão e recepção Modulação e demodulação Cabos e conectores Redes de dados Normas de telecomunicações",
+    "texto_embedding": "Telecomunicações I\nFundamentos e tecnologias básicas de telecomunicações aplicadas à eletrotécnica.\nPrincípios de transmissão e recepção Modulação e demodulação Cabos e conectores Redes de dados Normas de telecomunicações"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 12,
+    "disciplina": "Telecomunicações II",
+    "ementa": "Sistemas de telecomunicações industriais e integração com redes elétricas.",
+    "conteudo": "Fibra óptica Redes industriais Integração de sistemas elétricos e de dados Protocolos de comunicação Diagnóstico e manutenção de redes",
+    "texto_embedding": "Telecomunicações II\nSistemas de telecomunicações industriais e integração com redes elétricas.\nFibra óptica Redes industriais Integração de sistemas elétricos e de dados Protocolos de comunicação Diagnóstico e manutenção de redes"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 13,
+    "disciplina": "Automação Industrial",
+    "ementa": "Princípios e tecnologias de automação aplicadas à eletrotécnica.",
+    "conteudo": "Sensores e atuadores CLPs Sistemas supervisórios Automação de processos Integração de sistemas",
+    "texto_embedding": "Automação Industrial\nPrincípios e tecnologias de automação aplicadas à eletrotécnica.\nSensores e atuadores CLPs Sistemas supervisórios Automação de processos Integração de sistemas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 14,
+    "disciplina": "Máquinas e Transformadores",
+    "ementa": "Funcionamento, operação e manutenção de máquinas elétricas e transformadores.",
+    "conteudo": "Transformadores Motores CA e CC Geradores Perdas e rendimento Ensaios e manutenção",
+    "texto_embedding": "Máquinas e Transformadores\nFuncionamento, operação e manutenção de máquinas elétricas e transformadores.\nTransformadores Motores CA e CC Geradores Perdas e rendimento Ensaios e manutenção"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 15,
+    "disciplina": "Redes Elétricas",
+    "ementa": "Estudo das redes de distribuição elétrica e suas aplicações.",
+    "conteudo": "Estrutura das redes de distribuição Topologias de rede Equipamentos de proteção e manobra Monitoramento e manutenção Normas técnicas aplicáveis",
+    "texto_embedding": "Redes Elétricas\nEstudo das redes de distribuição elétrica e suas aplicações.\nEstrutura das redes de distribuição Topologias de rede Equipamentos de proteção e manobra Monitoramento e manutenção Normas técnicas aplicáveis"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 16,
+    "disciplina": "Hidropneumática",
+    "ementa": "Sistemas que utilizam fluidos e ar comprimido para acionamentos industriais.",
+    "conteudo": "Princípios de hidráulica e pneumática Componentes e simbologia Projetos de sistemas hidropneumáticos Manutenção preventiva e corretiva Segurança na operação",
+    "texto_embedding": "Hidropneumática\nSistemas que utilizam fluidos e ar comprimido para acionamentos industriais.\nPrincípios de hidráulica e pneumática Componentes e simbologia Projetos de sistemas hidropneumáticos Manutenção preventiva e corretiva Segurança na operação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 17,
+    "disciplina": "Comandos Elétricos",
+    "ementa": "Montagem e análise de circuitos de comando elétrico.",
+    "conteudo": "Dispositivos de manobra e proteção Simbologia e diagramas Lógica de acionamento Montagem de painéis Testes e diagnóstico de falhas",
+    "texto_embedding": "Comandos Elétricos\nMontagem e análise de circuitos de comando elétrico.\nDispositivos de manobra e proteção Simbologia e diagramas Lógica de acionamento Montagem de painéis Testes e diagnóstico de falhas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 0,
+    "disciplina": "Fundamentos da Comunicação Oral e Escrita",
+    "ementa": "Desenvolvimento das habilidades de comunicação aplicadas ao ambiente técnico e industrial.",
+    "conteudo": "Redação técnica Apresentações orais Relatórios e documentação técnica Vocabulário técnico Comunicação em equipes",
+    "texto_embedding": "Fundamentos da Comunicação Oral e Escrita\nDesenvolvimento das habilidades de comunicação aplicadas ao ambiente técnico e industrial.\nRedação técnica Apresentações orais Relatórios e documentação técnica Vocabulário técnico Comunicação em equipes"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 1,
+    "disciplina": "Informática Básica",
+    "ementa": "Introdução à informática e uso de softwares aplicados à mecânica.",
+    "conteudo": "Sistema operacional Pacote Office Softwares de CAD Segurança digital Pesquisa técnica",
+    "texto_embedding": "Informática Básica\nIntrodução à informática e uso de softwares aplicados à mecânica.\nSistema operacional Pacote Office Softwares de CAD Segurança digital Pesquisa técnica"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 2,
+    "disciplina": "Desenho Técnico",
+    "ementa": "Elaboração e interpretação de desenhos mecânicos.",
+    "conteudo": "Normas e simbologia Vistas e cortes Escalas e cotagem Leitura de projetos mecânicos Desenho assistido por computador",
+    "texto_embedding": "Desenho Técnico\nElaboração e interpretação de desenhos mecânicos.\nNormas e simbologia Vistas e cortes Escalas e cotagem Leitura de projetos mecânicos Desenho assistido por computador"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 3,
+    "disciplina": "Eletricidade",
+    "ementa": "Fundamentos de eletricidade aplicados à mecânica industrial.",
+    "conteudo": "Grandezas elétricas Circuitos elétricos Leis de Ohm e Kirchhoff Dispositivos de proteção Segurança em instalações",
+    "texto_embedding": "Eletricidade\nFundamentos de eletricidade aplicados à mecânica industrial.\nGrandezas elétricas Circuitos elétricos Leis de Ohm e Kirchhoff Dispositivos de proteção Segurança em instalações"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 4,
+    "disciplina": "Automação Industrial",
+    "ementa": "Aplicação de sistemas automáticos em processos mecânicos.",
+    "conteudo": "Sensores e atuadores CLPs Sistemas de controle Automação de linhas de produção Integração mecânica",
+    "texto_embedding": "Automação Industrial\nAplicação de sistemas automáticos em processos mecânicos.\nSensores e atuadores CLPs Sistemas de controle Automação de linhas de produção Integração mecânica"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 5,
+    "disciplina": "Sistemas Digitais e Microprocessador",
+    "ementa": "Conceitos e aplicações de sistemas digitais no setor mecânico.",
+    "conteudo": "Sistemas de numeração Portas lógicas Microprocessadores Interfaces de comunicação Aplicações na automação mecânica",
+    "texto_embedding": "Sistemas Digitais e Microprocessador\nConceitos e aplicações de sistemas digitais no setor mecânico.\nSistemas de numeração Portas lógicas Microprocessadores Interfaces de comunicação Aplicações na automação mecânica"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 6,
+    "disciplina": "Materiais de Construção Mecânica",
+    "ementa": "Propriedades e aplicações dos materiais utilizados na construção mecânica.",
+    "conteudo": "Classificação dos materiais Metais ferrosos e não ferrosos Polímeros e compósitos Tratamentos térmicos Seleção de materiais",
+    "texto_embedding": "Materiais de Construção Mecânica\nPropriedades e aplicações dos materiais utilizados na construção mecânica.\nClassificação dos materiais Metais ferrosos e não ferrosos Polímeros e compósitos Tratamentos térmicos Seleção de materiais"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 7,
+    "disciplina": "Hidráulica e Pneumática",
+    "ementa": "Princípios e aplicações de sistemas hidráulicos e pneumáticos.",
+    "conteudo": "Propriedades dos fluidos Componentes hidráulicos e pneumáticos Simbologia",
+    "texto_embedding": "Hidráulica e Pneumática\nPrincípios e aplicações de sistemas hidráulicos e pneumáticos.\nPropriedades dos fluidos Componentes hidráulicos e pneumáticos Simbologia"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 8,
+    "disciplina": "Processos de Fabricação I",
+    "ementa": "Estudo dos processos de fabricação mecânica.",
+    "conteudo": "Usinagem Fundição Soldagem Conformação mecânica Critérios de escolha de processos",
+    "texto_embedding": "Processos de Fabricação I\nEstudo dos processos de fabricação mecânica.\nUsinagem Fundição Soldagem Conformação mecânica Critérios de escolha de processos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 9,
+    "disciplina": "Processos de Fabricação II",
+    "ementa": "Aprofundamento em processos e controle de fabricação mecânica.",
+    "conteudo": "Processos não convencionais Usinagem de alta precisão Automação na fabricação Controle de qualidade Otimização de processos",
+    "texto_embedding": "Processos de Fabricação II\nAprofundamento em processos e controle de fabricação mecânica.\nProcessos não convencionais Usinagem de alta precisão Automação na fabricação Controle de qualidade Otimização de processos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 10,
+    "disciplina": "Componentes de Máquinas",
+    "ementa": "Estudo e dimensionamento dos elementos de máquinas.",
+    "conteudo": "Engrenagens Eixos e mancais Parafusos e uniões Molas e acoplamentos Critérios de dimensionamento",
+    "texto_embedding": "Componentes de Máquinas\nEstudo e dimensionamento dos elementos de máquinas.\nEngrenagens Eixos e mancais Parafusos e uniões Molas e acoplamentos Critérios de dimensionamento"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 11,
+    "disciplina": "Máquinas Térmicas",
+    "ementa": "Funcionamento e aplicação de máquinas térmicas na indústria.",
+    "conteudo": "Princípios da termodinâmica Motores de combustão Turbinas Compressores Manutenção de máquinas térmicas",
+    "texto_embedding": "Máquinas Térmicas\nFuncionamento e aplicação de máquinas térmicas na indústria.\nPrincípios da termodinâmica Motores de combustão Turbinas Compressores Manutenção de máquinas térmicas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 12,
+    "disciplina": "Eletrônica Geral",
+    "ementa": "Fundamentos de eletrônica aplicados à mecânica industrial.",
+    "conteudo": "Componentes eletrônicos Circuitos básicos Instrumentos de medição Eletrônica de potência Aplicações na automação mecânica",
+    "texto_embedding": "Eletrônica Geral\nFundamentos de eletrônica aplicados à mecânica industrial.\nComponentes eletrônicos Circuitos básicos Instrumentos de medição Eletrônica de potência Aplicações na automação mecânica"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 13,
+    "disciplina": "Metrologia Dimensional",
+    "ementa": "Medição e controle dimensional de peças mecânicas.",
+    "conteudo": "Princípios de metrologia Instrumentos de medição Calibração e ajustes Tolerâncias Controle dimensional em produção",
+    "texto_embedding": "Metrologia Dimensional\nMedição e controle dimensional de peças mecânicas.\nPrincípios de metrologia Instrumentos de medição Calibração e ajustes Tolerâncias Controle dimensional em produção"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 14,
+    "disciplina": "Mecânica Técnica",
+    "ementa": "Análise de forças e movimentos aplicados a sistemas mecânicos.",
+    "conteudo": "Estática e dinâmica Cálculo de esforços Momento e torque Resistência dos materiais Aplicações práticas",
+    "texto_embedding": "Mecânica Técnica\nAnálise de forças e movimentos aplicados a sistemas mecânicos.\nEstática e dinâmica Cálculo de esforços Momento e torque Resistência dos materiais Aplicações práticas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 15,
+    "disciplina": "Manutenção e Instalação de Equipamentos",
+    "ementa": "Técnicas de instalação e manutenção de máquinas e equipamentos.",
+    "conteudo": "Procedimentos de instalação Manutenção preventiva e corretiva Diagnóstico de falhas Segurança na manutenção Documentação técnica",
+    "texto_embedding": "Manutenção e Instalação de Equipamentos\nTécnicas de instalação e manutenção de máquinas e equipamentos.\nProcedimentos de instalação Manutenção preventiva e corretiva Diagnóstico de falhas Segurança na manutenção Documentação técnica"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 16,
+    "disciplina": "Planejamento e Técnica da Manutenção",
+    "ementa": "Organização e gestão das atividades de manutenção.",
+    "conteudo": "Tipos de manutenção Planejamento e programação",
+    "texto_embedding": "Planejamento e Técnica da Manutenção\nOrganização e gestão das atividades de manutenção.\nTipos de manutenção Planejamento e programação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 17,
+    "disciplina": "Gestão de Qualidade",
+    "ementa": "Princípios e práticas de gestão da qualidade na produção mecânica.",
+    "conteudo": "Normas de qualidade Ferramentas de controle Controle estatístico de processos Auditorias de qualidade Melhoria contínua",
+    "texto_embedding": "Gestão de Qualidade\nPrincípios e práticas de gestão da qualidade na produção mecânica.\nNormas de qualidade Ferramentas de controle Controle estatístico de processos Auditorias de qualidade Melhoria contínua"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Mecanica.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 18,
+    "disciplina": "Autocad",
+    "ementa": "Uso do AutoCAD na elaboração de projetos mecânicos.",
+    "conteudo": "Interface e comandos básicos Criação e edição de desenhos Camadas e blocos Cotagem e anotações Impressão de projetos",
+    "texto_embedding": "Autocad\nUso do AutoCAD na elaboração de projetos mecânicos.\nInterface e comandos básicos Criação e edição de desenhos Camadas e blocos Cotagem e anotações Impressão de projetos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 0,
+    "disciplina": "Fundamentos da Refrigeração e Climatização",
+    "ementa": "Estudo aprofundado dos princípios físicos, ciclos termodinâmicos e componentes dos sistemas de refrigeração e climatização.",
+    "conteudo": "- Princípios físicos do frio - Ciclo de compressão de vapor detalhado - Componentes do sistema - Fluidos refrigerantes e impacto ambiental - Diagramas termodinâmicos - Cálculo de carga térmica - Aplicações práticas",
+    "texto_embedding": "Fundamentos da Refrigeração e Climatização\nEstudo aprofundado dos princípios físicos, ciclos termodinâmicos e componentes dos sistemas de refrigeração e climatização.\n- Princípios físicos do frio - Ciclo de compressão de vapor detalhado - Componentes do sistema - Fluidos refrigerantes e impacto ambiental - Diagramas termodinâmicos - Cálculo de carga térmica - Aplicações práticas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 1,
+    "disciplina": "Termodinâmica",
+    "ementa": "Aplicação das leis da termodinâmica no funcionamento e eficiência de sistemas frigoríficos.",
+    "conteudo": "- Primeira e segunda leis - Propriedades das substâncias - Calor sensível e latente - Diagramas P-h - Análise de ciclos - COP - Eficiência energética",
+    "texto_embedding": "Termodinâmica\nAplicação das leis da termodinâmica no funcionamento e eficiência de sistemas frigoríficos.\n- Primeira e segunda leis - Propriedades das substâncias - Calor sensível e latente - Diagramas P-h - Análise de ciclos - COP - Eficiência energética"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 2,
+    "disciplina": "Mecânica de Fluidos",
+    "ementa": "Estudo do comportamento dos fluidos.",
+    "conteudo": "- Propriedades dos fluidos - Pressão e empuxo - Equação de Bernoulli - Escoamento - Perdas de carga - Dimensionamento - Bombas e ventiladores",
+    "texto_embedding": "Mecânica de Fluidos\nEstudo do comportamento dos fluidos.\n- Propriedades dos fluidos - Pressão e empuxo - Equação de Bernoulli - Escoamento - Perdas de carga - Dimensionamento - Bombas e ventiladores"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 3,
+    "disciplina": "Refrigeração Residencial",
+    "ementa": "Instalação e manutenção de sistemas residenciais.",
+    "conteudo": "- Sistemas split e inverter - Instalação - Vácuo e carga de gás - Testes - Diagnóstico de falhas - Manutenção preventiva - Correções",
+    "texto_embedding": "Refrigeração Residencial\nInstalação e manutenção de sistemas residenciais.\n- Sistemas split e inverter - Instalação - Vácuo e carga de gás - Testes - Diagnóstico de falhas - Manutenção preventiva - Correções"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 4,
+    "disciplina": "Refrigeração Comercial",
+    "ementa": "Sistemas comerciais.",
+    "conteudo": "- Equipamentos comerciais - Controle de temperatura - Manutenção - Diagnóstico - Normas sanitárias - Dimensionamento básico - Operação",
+    "texto_embedding": "Refrigeração Comercial\nSistemas comerciais.\n- Equipamentos comerciais - Controle de temperatura - Manutenção - Diagnóstico - Normas sanitárias - Dimensionamento básico - Operação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 5,
+    "disciplina": "Refrigeração Industrial",
+    "ementa": "Sistemas industriais.",
+    "conteudo": "- Sistemas centralizados - Amônia e CO2 - Operação - Manutenção - Monitoramento - Controle de processos - Segurança",
+    "texto_embedding": "Refrigeração Industrial\nSistemas industriais.\n- Sistemas centralizados - Amônia e CO2 - Operação - Manutenção - Monitoramento - Controle de processos - Segurança"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 6,
+    "disciplina": "Planejamento da Manutenção",
+    "ementa": "Gestão da manutenção.",
+    "conteudo": "- Tipos de manutenção - Planos - Indicadores - Ordens de serviço - Controle de estoque - Paradas técnicas - Documentação",
+    "texto_embedding": "Planejamento da Manutenção\nGestão da manutenção.\n- Tipos de manutenção - Planos - Indicadores - Ordens de serviço - Controle de estoque - Paradas técnicas - Documentação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 7,
+    "disciplina": "Climatização",
+    "ementa": "Sistemas de conforto térmico.",
+    "conteudo": "- Sistemas centrais - Dutos - Qualidade do ar - Controle de umidade - Filtragem - Balanceamento - Manutenção",
+    "texto_embedding": "Climatização\nSistemas de conforto térmico.\n- Sistemas centrais - Dutos - Qualidade do ar - Controle de umidade - Filtragem - Balanceamento - Manutenção"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 8,
+    "disciplina": "Metrologia Dimensional",
+    "ementa": "Medição e controle.",
+    "conteudo": "- Instrumentos - Calibração - Tolerâncias - Medições - Controle operacional - Leitura de dados - Registro",
+    "texto_embedding": "Metrologia Dimensional\nMedição e controle.\n- Instrumentos - Calibração - Tolerâncias - Medições - Controle operacional - Leitura de dados - Registro"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 9,
+    "disciplina": "Higiene e Segurança do Trabalho",
+    "ementa": "Segurança aplicada.",
+    "conteudo": "- NRs - Riscos - EPIs - Manipulação de gases - Prevenção - Combate a incêndio - Primeiros socorros",
+    "texto_embedding": "Higiene e Segurança do Trabalho\nSegurança aplicada.\n- NRs - Riscos - EPIs - Manipulação de gases - Prevenção - Combate a incêndio - Primeiros socorros"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 10,
+    "disciplina": "Projeto de Instalações",
+    "ementa": "Projetos técnicos.",
+    "conteudo": "- Carga térmica - Dimensionamento - Seleção de equipamentos - Layout - Leitura de projetos - Normas - Apresentação",
+    "texto_embedding": "Projeto de Instalações\nProjetos técnicos.\n- Carga térmica - Dimensionamento - Seleção de equipamentos - Layout - Leitura de projetos - Normas - Apresentação"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 11,
+    "disciplina": "Automação Aplicada",
+    "ementa": "Controle automatizado.",
+    "conteudo": "- Sensores - Controladores - CLP - Supervisórios - Monitoramento remoto - Integração - Diagnóstico",
+    "texto_embedding": "Automação Aplicada\nControle automatizado.\n- Sensores - Controladores - CLP - Supervisórios - Monitoramento remoto - Integração - Diagnóstico"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 12,
+    "disciplina": "Manutenção de Compressores",
+    "ementa": "Manutenção de compressores.",
+    "conteudo": "- Tipos - Funcionamento - Diagnóstico - Manutenção - Lubrificação - Montagem - Testes",
+    "texto_embedding": "Manutenção de Compressores\nManutenção de compressores.\n- Tipos - Funcionamento - Diagnóstico - Manutenção - Lubrificação - Montagem - Testes"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 3,
+    "chunk_id": 13,
+    "disciplina": "Eletrônica Aplicada",
+    "ementa": "Eletrônica aplicada.",
+    "conteudo": "- Componentes - Circuitos - Placas - Medições - Diagnóstico - Proteção - Aplicações",
+    "texto_embedding": "Eletrônica Aplicada\nEletrônica aplicada.\n- Componentes - Circuitos - Placas - Medições - Diagnóstico - Proteção - Aplicações"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao.docx.pdf",
+    "pagina": 4,
+    "chunk_id": 14,
+    "disciplina": "Conservação de Energia",
+    "ementa": "Eficiência energética.",
+    "conteudo": "- Consumo - Eficiência - Economia - Isolamento - Manutenção - Normas - Sustentabilidade",
+    "texto_embedding": "Conservação de Energia\nEficiência energética.\n- Consumo - Eficiência - Economia - Isolamento - Manutenção - Normas - Sustentabilidade"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 0,
+    "disciplina": "Português Instrumental",
+    "ementa": "Aprimoramento da comunicação escrita e oral no contexto da gestão escolar.",
+    "conteudo": "Ortografia e gramática aplicadas Leitura e interpretação de textos Redação oficial e administrativa Produção de relatórios e memorandos Vocabulário técnico da área educacional",
+    "texto_embedding": "Português Instrumental\nAprimoramento da comunicação escrita e oral no contexto da gestão escolar.\nOrtografia e gramática aplicadas Leitura e interpretação de textos Redação oficial e administrativa Produção de relatórios e memorandos Vocabulário técnico da área educacional"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 1,
+    "disciplina": "Informática Aplicada ao Trabalho",
+    "ementa": "Uso de ferramentas digitais para execução das atividades administrativas escolares.",
+    "conteudo": "Pacote Office aplicado à gestão escolar Sistemas acadêmicos e administrativos Segurança digital e proteção de dados Organização de arquivos eletrônicos Ferramentas de colaboração online",
+    "texto_embedding": "Informática Aplicada ao Trabalho\nUso de ferramentas digitais para execução das atividades administrativas escolares.\nPacote Office aplicado à gestão escolar Sistemas acadêmicos e administrativos Segurança digital e proteção de dados Organização de arquivos eletrônicos Ferramentas de colaboração online"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 2,
+    "disciplina": "Fundamentos da Educação",
+    "ementa": "Conceitos básicos e estrutura do sistema educacional brasileiro.",
+    "conteudo": "História da educação no Brasil Princípios e funções da educação Estrutura administrativa da educação Legislação educacional básica Políticas públicas educacionais",
+    "texto_embedding": "Fundamentos da Educação\nConceitos básicos e estrutura do sistema educacional brasileiro.\nHistória da educação no Brasil Princípios e funções da educação Estrutura administrativa da educação Legislação educacional básica Políticas públicas educacionais"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 3,
+    "disciplina": "Legislação Educacional",
+    "ementa": "Normas e regulamentos que regem o funcionamento das instituições de ensino.",
+    "conteudo": "Constituição Federal e artigos da educação LDB - Lei de Diretrizes e Bases Regimentos escolares Direitos e deveres da comunidade escolar Documentação e registros obrigatórios",
+    "texto_embedding": "Legislação Educacional\nNormas e regulamentos que regem o funcionamento das instituições de ensino.\nConstituição Federal e artigos da educação LDB - Lei de Diretrizes e Bases Regimentos escolares Direitos e deveres da comunidade escolar Documentação e registros obrigatórios"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 4,
+    "disciplina": "Procedimentos de Matrícula Escolar",
+    "ementa": "Processos administrativos relacionados à matrícula e transferência de alunos.",
+    "conteudo": "Fluxo de matrícula e rematrícula Documentação exigida Registro e atualização de dados Transferências e cancelamentos Uso de sistemas informatizados",
+    "texto_embedding": "Procedimentos de Matrícula Escolar\nProcessos administrativos relacionados à matrícula e transferência de alunos.\nFluxo de matrícula e rematrícula Documentação exigida Registro e atualização de dados Transferências e cancelamentos Uso de sistemas informatizados"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 5,
+    "disciplina": "Estrutura e Funcionamento de Ensino",
+    "ementa": "Organização e funcionamento das instituições escolares.",
+    "conteudo": "Modalidades e níveis de ensino Organização curricular Calendário escolar Atividades pedagógicas e administrativas Interação entre setores da escola",
+    "texto_embedding": "Estrutura e Funcionamento de Ensino\nOrganização e funcionamento das instituições escolares.\nModalidades e níveis de ensino Organização curricular Calendário escolar Atividades pedagógicas e administrativas Interação entre setores da escola"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 1,
+    "chunk_id": 6,
+    "disciplina": "Técnicas Secretariais",
+    "ementa": "Métodos e práticas administrativas aplicadas à secretaria escolar.",
+    "conteudo": "Rotinas administrativas Atendimento ao público Organização de documentos",
+    "texto_embedding": "Técnicas Secretariais\nMétodos e práticas administrativas aplicadas à secretaria escolar.\nRotinas administrativas Atendimento ao público Organização de documentos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 7,
+    "disciplina": "Técnica de Arquivo Escolar",
+    "ementa": "Procedimentos para organização e conservação de arquivos escolares.",
+    "conteudo": "Tipos de arquivos e documentos Classificação e ordenação Métodos de arquivamento físico e digital Conservação e restauração de documentos Acesso e controle de arquivos",
+    "texto_embedding": "Técnica de Arquivo Escolar\nProcedimentos para organização e conservação de arquivos escolares.\nTipos de arquivos e documentos Classificação e ordenação Métodos de arquivamento físico e digital Conservação e restauração de documentos Acesso e controle de arquivos"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 8,
+    "disciplina": "Gerenciamento da Informação na Secretaria Escolar",
+    "ementa": "Gestão de informações e dados administrativos escolares.",
+    "conteudo": "Coleta e organização de dados Uso de sistemas de gestão escolar Relatórios e indicadores Proteção de dados sensíveis Fluxo de informações na escola",
+    "texto_embedding": "Gerenciamento da Informação na Secretaria Escolar\nGestão de informações e dados administrativos escolares.\nColeta e organização de dados Uso de sistemas de gestão escolar Relatórios e indicadores Proteção de dados sensíveis Fluxo de informações na escola"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 9,
+    "disciplina": "Gerenciamento de Recursos Humanos e Materiais",
+    "ementa": "Administração de pessoal e recursos materiais da instituição escolar.",
+    "conteudo": "Controle de frequência e folha de pagamento Contratação e desligamento de pessoal Controle de estoque de materiais Aquisição e distribuição de recursos Manutenção de infraestrutura",
+    "texto_embedding": "Gerenciamento de Recursos Humanos e Materiais\nAdministração de pessoal e recursos materiais da instituição escolar.\nControle de frequência e folha de pagamento Contratação e desligamento de pessoal Controle de estoque de materiais Aquisição e distribuição de recursos Manutenção de infraestrutura"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 10,
+    "disciplina": "Matemática: Estatística e Indicadores Educacionais",
+    "ementa": "Uso de conceitos matemáticos e estatísticos na gestão escolar.",
+    "conteudo": "Operações matemáticas aplicadas Medidas de tendência central Indicadores de desempenho escolar Análise e interpretação de gráficos Aplicações em relatórios escolares",
+    "texto_embedding": "Matemática: Estatística e Indicadores Educacionais\nUso de conceitos matemáticos e estatísticos na gestão escolar.\nOperações matemáticas aplicadas Medidas de tendência central Indicadores de desempenho escolar Análise e interpretação de gráficos Aplicações em relatórios escolares"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 11,
+    "disciplina": "Técnica de Escrituração",
+    "ementa": "Registros e escrituração de documentos escolares.",
+    "conteudo": "Livros e atas escolares Preenchimento de formulários Registro de notas e frequências Protocolos e autenticações Normas de arquivamento",
+    "texto_embedding": "Técnica de Escrituração\nRegistros e escrituração de documentos escolares.\nLivros e atas escolares Preenchimento de formulários Registro de notas e frequências Protocolos e autenticações Normas de arquivamento"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 12,
+    "disciplina": "Psicologia Educacional",
+    "ementa": "Estudo dos aspectos psicológicos relacionados ao processo de ensino-aprendizagem.",
+    "conteudo": "Desenvolvimento cognitivo e socioemocional Teorias da aprendizagem Relação professor-aluno Motivação e desempenho escolar Intervenções psicopedagógicas",
+    "texto_embedding": "Psicologia Educacional\nEstudo dos aspectos psicológicos relacionados ao processo de ensino-aprendizagem.\nDesenvolvimento cognitivo e socioemocional Teorias da aprendizagem Relação professor-aluno Motivação e desempenho escolar Intervenções psicopedagógicas"
+  },
+  {
+    "arquivo": "Tabela_Conteudo_Programatico_Tecnico_Secretaria_Escolar.docx.pdf",
+    "pagina": 2,
+    "chunk_id": 13,
+    "disciplina": "Método de Pesquisa",
+    "ementa": "Procedimentos metodológicos para elaboração de trabalhos e projetos escolares.",
+    "conteudo": "Etapas da pesquisa Tipos de pesquisa Coleta e análise de dados Estrutura de trabalhos acadêmicos Normas da ABNT",
+    "texto_embedding": "Método de Pesquisa\nProcedimentos metodológicos para elaboração de trabalhos e projetos escolares.\nEtapas da pesquisa Tipos de pesquisa Coleta e análise de dados Estrutura de trabalhos acadêmicos Normas da ABNT"
+  }
+]
