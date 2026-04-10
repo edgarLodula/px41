@@ -1,6 +1,6 @@
 import fitz
-from text_utils import limpar_texto, normalizar_campo
-from ocr_utils import extrair_texto_com_ocr
+from src.syllabus_extractor.text_utils import limpar_texto, normalizar_campo
+from src.syllabus_extractor.ocr_utils import extrair_texto_com_ocr
 
 def extrair_texto_pagina(page):
     texto = page.get_text("text").strip()

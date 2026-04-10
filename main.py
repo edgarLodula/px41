@@ -1,9 +1,9 @@
 import os
 import json
-from pdf_processor import processar_pdf, processar_semantico
+from src.syllabus_extractor.pdf_processor import processar_pdf, processar_semantico
 
 PASTA_PDFS = "data/input"
-PASTA_SAIDA = "data/output"
+PASTA_SAIDA = "data/output/json"
 
 os.makedirs(PASTA_SAIDA, exist_ok=True)
 
