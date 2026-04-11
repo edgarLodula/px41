@@ -1,35 +1,56 @@
 import os
 import json
 
+# =========================
 # EXTRAÇÃO
+# =========================
 from src.syllabus_extractor.pdf_processor import processar_pdf, processar_semantico
 
+# =========================
 # RAG
+# =========================
 from src.content_generation.data_loader import carregar_base
 from src.content_generation.embedding_model import carregar_modelo, gerar_embeddings
 from src.content_generation.faiss_index import criar_ou_carregar_index
 from src.content_generation.rag_pipeline import buscar_chunks
 from src.content_generation.generator import configurar_gemini, gerar_documento
 
-# OUTPUT
+# =========================
+# OUTPUT (MARKDOWN)
+# =========================
 from src.output_formatter.markdown_generator import gerar_markdowns
 
+# =========================
+# OUTPUT (PDF)
+# =========================
+from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 
-# -------------------------
+
+# =========================
 # PATHS
-# -------------------------
+# =========================
 PASTA_PDFS = "data/input"
 PASTA_JSON = "data/output/json"
 PASTA_INDEX = "data/output/faiss"
+PASTA_MARKDOWN = "data/output/markdown"
+PASTA_PDF = "data/output/workbooks_pdf"
+LOGO_PATH = "assets/logo.jpeg"
 
 CAMINHO_JSON = os.path.join(PASTA_JSON, "base_geral.json")
 CAMINHO_INDEX = os.path.join(PASTA_INDEX, "faiss_index.bin")
 
 
+# =========================
+# ETAPA 1 — EXTRAÇÃO
+# =========================
 def extrair_base():
     os.makedirs(PASTA_JSON, exist_ok=True)
 
     arquivos_pdf = [f for f in os.listdir(PASTA_PDFS) if f.endswith(".pdf")]
+
+    if not arquivos_pdf:
+        print("⚠️ Nenhum PDF encontrado em data/input")
+        return
 
     base_geral = []
 
@@ -49,46 +70,54 @@ def extrair_base():
     print(f"\n✅ JSON salvo em: {CAMINHO_JSON}")
 
 
+# =========================
+# PIPELINE PRINCIPAL
+# =========================
 def main():
-    # -------------------------
-    # 1. EXTRAÇÃO PDF → JSON
-    # -------------------------
+    # 1. EXTRAÇÃO
     extrair_base()
 
-    # -------------------------
     # 2. CARREGA BASE
-    # -------------------------
     base_geral = carregar_base(CAMINHO_JSON)
 
-    # -------------------------
+    if not base_geral:
+        print("❌ Base vazia. Encerrando.")
+        return
+
     # 3. EMBEDDINGS
-    # -------------------------
     model = carregar_modelo()
     embeddings = gerar_embeddings(model, base_geral)
 
-    # -------------------------
     # 4. FAISS
-    # -------------------------
     os.makedirs(PASTA_INDEX, exist_ok=True)
     index = criar_ou_carregar_index(CAMINHO_INDEX, embeddings)
 
-    # -------------------------
     # 5. GEMINI
-    # -------------------------
     gemini = configurar_gemini()
 
-    # -------------------------
-    # 6. GERA MARKDOWNS
-    # -------------------------
+    # 6. GERA MARKDOWNS (por curso → disciplinas)
     gerar_markdowns(
         base_geral=base_geral,
         buscar_chunks=buscar_chunks,
         gerar_documento=gerar_documento,
         model=model,
         index=index,
-        gemini=gemini
+        gemini=gemini,
+        pasta_saida=PASTA_MARKDOWN
     )
 
+    # 7. GERA APOSTILAS PDF (1 por curso)
+    gerar_apostilas_por_curso(
+        pasta_markdown=PASTA_MARKDOWN,
+        pasta_pdf=PASTA_PDF,
+        logo_path=LOGO_PATH
+    )
 
+    print("\n🎯 Pipeline finalizado com sucesso!")
+
+
+# =========================
+# ENTRYPOINT
+# =========================
 if __name__ == "__main__":
     main()
