@@ -24,13 +24,18 @@ project/
 ├── data/
 │ ├── input/ # PDFs de entrada (ementas)
 │ └── output/
-│ ├── json/ # Dados extraídos
-│ ├── faiss/ # Índices vetoriais
-│ ├── markdown/ # Conteúdo gerado por disciplina
-│ ├── workbooks_pdf/ # Apostilas finais por curso
-│ └── videos/ # Vídeos, áudios e slides por disciplina
+│     ├── json/ # Dados extraídos
+│     ├── faiss/ # Índices vetoriais
+│     ├── markdown/ # Conteúdo gerado por disciplina
+│     ├── workbooks_pdf/ # Apostilas finais por curso
+│     └── videos/ # Vídeos, áudios e slides por disciplina
 ├── assets/ # Logo, avatar e recursos estáticos
 ├── src/ # Módulos do sistema
+│   ├── syllabus_extractor/    # Extração de PDFs + OCR
+│   ├── content_generation/    # RAG + IA (Gemini)
+│   ├── output_formatter/      # Geração de Markdown
+│   ├── workbooks_generator/   # Geração de PDFs
+│   └── video_generator/       # Geração de vídeos
 ├── main.py # Pipeline principal
 ├── requirements.txt
 └── README.md
