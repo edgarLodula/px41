@@ -1,29 +1,20 @@
 import os
 import json
 
-# =========================
 # EXTRAÇÃO
-# =========================
 from src.syllabus_extractor.pdf_processor import processar_pdf, processar_semantico
 
-# =========================
 # RAG
-# =========================
 from src.content_generation.data_loader import carregar_base
 from src.content_generation.embedding_model import carregar_modelo, gerar_embeddings
 from src.content_generation.faiss_index import criar_ou_carregar_index
 from src.content_generation.rag_pipeline import buscar_chunks
 from src.content_generation.generator import configurar_gemini, gerar_documento
 
-# =========================
-# OUTPUT (MARKDOWN)
-# =========================
+# OUTPUT
 from src.output_formatter.markdown_generator import gerar_markdowns
-
-# =========================
-# OUTPUT (PDF)
-# =========================
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
+from src.video_generator.pipeline_video import gerar_videos_por_disciplina
 
 
 # =========================
@@ -34,6 +25,8 @@ PASTA_JSON = "data/output/json"
 PASTA_INDEX = "data/output/faiss"
 PASTA_MARKDOWN = "data/output/markdown"
 PASTA_PDF = "data/output/workbooks_pdf"
+PASTA_VIDEO = "data/output/videos"
+
 LOGO_PATH = "assets/logo.jpeg"
 
 CAMINHO_JSON = os.path.join(PASTA_JSON, "base_geral.json")
@@ -41,7 +34,7 @@ CAMINHO_INDEX = os.path.join(PASTA_INDEX, "faiss_index.bin")
 
 
 # =========================
-# ETAPA 1 — EXTRAÇÃO
+# EXTRAÇÃO
 # =========================
 def extrair_base():
     os.makedirs(PASTA_JSON, exist_ok=True)
@@ -71,13 +64,13 @@ def extrair_base():
 
 
 # =========================
-# PIPELINE PRINCIPAL
+# MAIN
 # =========================
 def main():
     # 1. EXTRAÇÃO
     extrair_base()
 
-    # 2. CARREGA BASE
+    # 2. BASE
     base_geral = carregar_base(CAMINHO_JSON)
 
     if not base_geral:
@@ -95,7 +88,7 @@ def main():
     # 5. GEMINI
     gemini = configurar_gemini()
 
-    # 6. GERA MARKDOWNS (por curso → disciplinas)
+    # 6. MARKDOWN
     gerar_markdowns(
         base_geral=base_geral,
         buscar_chunks=buscar_chunks,
@@ -106,14 +99,29 @@ def main():
         pasta_saida=PASTA_MARKDOWN
     )
 
-    # 7. GERA APOSTILAS PDF (1 por curso)
+    # 7. PDF
     gerar_apostilas_por_curso(
         pasta_markdown=PASTA_MARKDOWN,
         pasta_pdf=PASTA_PDF,
         logo_path=LOGO_PATH
     )
 
-    print("\n🎯 Pipeline finalizado com sucesso!")
+    # 8. VIDEO
+    groq_token = os.getenv("GROQ_TOKEN")
+
+    if not groq_token:
+        print("⚠️ GROQ_TOKEN não encontrado. Pulando geração de vídeos.")
+    else:
+        try:
+            gerar_videos_por_disciplina(
+                pasta_markdown=PASTA_MARKDOWN,
+                pasta_saida=PASTA_VIDEO,
+                groq_token=groq_token
+            )
+        except Exception as e:
+            print(f"❌ Erro na geração de vídeos: {e}")
+
+    print("\n🎯 Pipeline finalizado!")
 
 
 # =========================

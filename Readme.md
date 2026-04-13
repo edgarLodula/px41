@@ -1,64 +1,51 @@
 # Gerador de Material Didático com IA
 
-Projeto para **extração automática de ementas de cursos em PDF**, geração de **conteúdo didático com IA (RAG)** e criação de **apostilas completas em PDF organizadas por curso**.
+Sistema automatizado para produção de conteúdo educacional a partir de ementas em PDF, utilizando Inteligência Artificial para gerar apostilas, roteiros, áudios, slides e vídeos completos.
 
 ---
 
-## Visão Geral
+## Funcionalidades
 
-O sistema realiza um pipeline completo:
-
-1. Lê PDFs de cursos
-2. Extrai disciplinas, ementas e conteúdos
-3. Gera embeddings e indexa com FAISS
-4. Usa IA (Gemini) para gerar material didático
-5. Cria arquivos Markdown por disciplina
-6. Consolida tudo em **apostilas por curso (PDF)**
+- Extração automática de conteúdo de PDFs (com suporte a OCR)
+- Geração de material didático com RAG + Google Gemini
+- Criação de apostilas em PDF por curso
+- Geração completa de videoaulas:
+- Roteiro estruturado
+- Áudio narrado (TTS)
+- Slides ilustrativos
+- Vídeo final com avatar
 
 ---
 
-## 📂 Estrutura do Projeto
+## Estrutura do Projeto
 
-```
 project/
-│
 ├── data/
-│   ├── input/                 # PDFs de entrada
-│   └── output/
-│       ├── json/              # Base estruturada
-│       ├── faiss/             # Índice vetorial
-│       ├── markdown/          # Conteúdo gerado por disciplina
-│       │   └── curso_x/
-│       │       ├── disciplina_1.md
-│       │       └── disciplina_2.md
-│       └── workbooks_pdf/     # Apostilas finais
-│
-├── assets/
-│   └── logo.jpeg              # Logo da instituição
-│
-├── src/
-│   ├── syllabus_extractor/    # Extração de PDFs + OCR
-│   ├── content_generation/    # RAG + IA (Gemini)
-│   ├── output_formatter/      # Geração de Markdown
-│   └── workbooks_generator/   # Geração de PDFs
-│
-├── main.py                    # Pipeline principal
+│ ├── input/ # PDFs de entrada (ementas)
+│ └── output/
+│ ├── json/ # Dados extraídos
+│ ├── faiss/ # Índices vetoriais
+│ ├── markdown/ # Conteúdo gerado por disciplina
+│ ├── workbooks_pdf/ # Apostilas finais por curso
+│ └── videos/ # Vídeos, áudios e slides por disciplina
+├── assets/ # Logo, avatar e recursos estáticos
+├── src/ # Módulos do sistema
+├── main.py # Pipeline principal
 ├── requirements.txt
 └── README.md
-```
+
 
 ---
 
-## Instalação
+## 🚀 Instalação
 
 ### 1. Criar ambiente virtual
 
 ```bash
 python -m venv venv
-venv\Scripts\activate  # Windows
+source venv/bin/activate      # Linux/Mac
+venv\Scripts\activate         # Windows
 ```
-
----
 
 ### 2. Instalar dependências
 
@@ -66,138 +53,95 @@ venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
----
+## Configuração de APIs e Ferramentas
 
-## Configuração da API (Gemini)
-
-Crie um arquivo `.env` na raiz:
-
-```
-GEMINI_API_KEY=sua_chave_aqui
-```
-
-Ou no Windows:
+### Google Gemini
 
 ```bash
-set GEMINI_API_KEY=sua_chave_aqui
+set GEMINI_API_KEY=sua_chave_aqui   # Windows
+export GEMINI_API_KEY=sua_chave_aqui # Linux/Mac
 ```
 
----
+### Groq
 
-## OCR (Tesseract)
+```bash
+set GROQ_TOKEN=sua_chave_aqui
+```
 
-Necessário para PDFs escaneados.
+### Tesseract OCR
 
-### Instalar:
+Baixe e instale em:
 
 https://github.com/UB-Mannheim/tesseract/wiki
 
-### Configurar no código:
+Configure no código:
 
-```python
+```bash
+import pytesseract
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 
----
+### PDFKit (wkhtmltopdf)
 
-## Geração de PDF
-
-O projeto usa:
-
-* `pdfkit`
-* `wkhtmltopdf`
-
-### Instalar wkhtmltopdf:
+Baixe e instale:
 
 https://wkhtmltopdf.org/downloads.html
 
-### Caminho padrão:
+Configure no código:
 
-```python
-wkhtmltopdf = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+```bash
+import pdfkit
+config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
 ```
 
----
-
-## ▶️ Como Executar
-
-### Pipeline completo:
+## Como Executar
 
 ```bash
 python main.py
+O pipeline executará automaticamente todas as etapas:
 ```
 
----
+Extração do PDF → JSON estruturado
 
-## Fluxo de Execução
+Indexação → Embeddings + FAISS
 
-### 1. Extração
+Geração de conteúdo → RAG + Gemini → Markdown
 
-```
-PDF → JSON estruturado
-```
+Criação de apostilas → Markdown → PDF
 
-### 2. Processamento semântico
-
-```
-JSON → embeddings → FAISS
-```
-
-### 3. Geração com IA
-
-```
-RAG + Gemini → Markdown por disciplina
-```
-
-### 4. Geração de apostilas
-
-```
-Markdown → PDF por curso
-```
-
----
+Produção de videoaulas → Roteiro → Áudio → Slides → Vídeo
 
 ## Saída Esperada
 
-### Markdown:
+### Material em Markdown
 
-```
-data/output/markdown/
-    curso_x/
-        disciplina_1.md
-        disciplina_2.md
+```bash
+data/output/markdown/curso_x/disciplina_1.md
+data/output/markdown/curso_x/disciplina_2.md
 ```
 
-### Apostilas:
+### Apostilas em PDF
 
+```bash
+data/output/workbooks_pdf/curso_x.pdf
 ```
-data/output/workbooks_pdf/
-    curso_x.pdf
+
+### Vídeos e recursos
+
+```bash
+data/output/videos/curso_x/disciplina_y/
+├── audio.mp3
+├── video.mp4
+└── slides/
+    ├── slide_001.png
+    └── ...
 ```
-
-Cada PDF contém:
-
-* Capa institucional
-* Todas as disciplinas do curso
-* Quebra de página entre conteúdos
-
----
-
-## Observações
-
-* O nome do curso é derivado automaticamente (ex: nome do arquivo PDF)
-* O sistema pode sofrer rate limit da API do Gemini
-* OCR só é usado quando necessário (fallback)
-
----
 
 ## Tecnologias Utilizadas
 
-* Python
-* FAISS (busca vetorial)
-* Sentence Transformers
-* Google Gemini API
-* PyMuPDF / pdfplumber
-* Tesseract OCR
-* Markdown
-* pdfkit / wkhtmltopdf
+Extração de PDF	- pytesseract, pdfplumber, Pillow
+Indexação vetorial	- FAISS, sentence-transformers
+Geração de texto	- Google Gemini API, Groq API
+Formatação	- markdown, pdfkit, wkhtmltopdf
+Produção de vídeo	- moviepy, gtts, pydub, Pillow, imageio-ffmpeg
+Linguagem	- Python 3.11.9
