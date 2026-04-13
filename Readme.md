@@ -19,6 +19,7 @@ Sistema automatizado para produção de conteúdo educacional a partir de ementa
 
 ## Estrutura do Projeto
 
+```
 project/
 ├── data/
 │ ├── input/ # PDFs de entrada (ementas)
@@ -33,6 +34,7 @@ project/
 ├── main.py # Pipeline principal
 ├── requirements.txt
 └── README.md
+```
 
 
 ---
@@ -139,9 +141,11 @@ data/output/videos/curso_x/disciplina_y/
 
 ## Tecnologias Utilizadas
 
+```
 Extração de PDF	- pytesseract, pdfplumber, Pillow
 Indexação vetorial	- FAISS, sentence-transformers
 Geração de texto	- Google Gemini API, Groq API
 Formatação	- markdown, pdfkit, wkhtmltopdf
 Produção de vídeo	- moviepy, gtts, pydub, Pillow, imageio-ffmpeg
 Linguagem	- Python 3.11.9
+```
