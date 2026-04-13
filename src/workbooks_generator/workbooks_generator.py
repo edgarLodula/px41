@@ -4,9 +4,8 @@ import base64
 import pdfkit
 
 # CONFIG DO WKHTMLTOPDF
-config = pdfkit.configuration(
-    wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
-)
+config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
+
 
 
 def gerar_html_completo(conteudos_html, nome_curso, logo_base64):
