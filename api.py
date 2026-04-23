@@ -18,29 +18,28 @@ from src.output_formatter.markdown_generator import gerar_markdowns
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
 
-
-
 # =========================
 # PATHS
 # =========================
-PASTA_PDFS    = "data/input"
-PASTA_JSON    = "data/output/json"
-PASTA_INDEX   = "data/output/faiss"
-PASTA_MARKDOWN= "data/output/markdown"
-PASTA_PDF     = "data/output/workbooks_pdf"
-PASTA_VIDEO   = "data/output/videos"
-LOGO_PATH     = "assets/logo.jpeg"
-CAMINHO_JSON  = os.path.join(PASTA_JSON, "base_geral.json")
-CAMINHO_INDEX = os.path.join(PASTA_INDEX, "faiss_index.bin")
+PASTA_PDFS     = "data/input"
+PASTA_JSON     = "data/output/json"
+PASTA_INDEX    = "data/output/faiss"
+PASTA_MARKDOWN = "data/output/markdown"
+PASTA_PDF      = "data/output/workbooks_pdf"
+PASTA_VIDEO    = "data/output/videos"
+LOGO_PATH      = "assets/logo.jpeg"
+CAMINHO_JSON   = os.path.join(PASTA_JSON, "base_geral.json")
+CAMINHO_INDEX  = os.path.join(PASTA_INDEX, "faiss_index.bin")
 
 from dotenv import load_dotenv
 load_dotenv()
+
 # =========================
 # ESTADO GLOBAL DO PIPELINE
 # =========================
 pipeline_state = {
-    "stage": 0,           # etapa atual (0 = idle)
-    "status": "idle",     # idle | running | awaiting_approval | approved | done | error
+    "stage": 0,
+    "status": "idle",  # idle | running | awaiting_approval | done | error
     "stages": [
         {"name": "Extração de PDFs",     "status": "waiting"},
         {"name": "Carregamento da base", "status": "waiting"},
@@ -53,7 +52,8 @@ pipeline_state = {
     ],
     "error": None,
     "apostila_path": None,
-    "video_path": None,
+    "video_path": None,   # mantido por compatibilidade
+    "video_paths": {},    # ✅ NOVO — dicionário { nome_disciplina: caminho_absoluto }
 }
 
 def set_stage(index, status):
@@ -66,6 +66,7 @@ def reset_state():
     pipeline_state["error"] = None
     pipeline_state["apostila_path"] = None
     pipeline_state["video_path"] = None
+    pipeline_state["video_paths"] = {}   # ✅ reseta o dicionário também
     for s in pipeline_state["stages"]:
         s["status"] = "waiting"
 
@@ -77,7 +78,6 @@ def run_pipeline():
         os.makedirs(PASTA_JSON, exist_ok=True)
         os.makedirs(PASTA_INDEX, exist_ok=True)
 
-        # ETAPA 1 — Extração
         set_stage(0, "running")
         pipeline_state["status"] = "running"
         arquivos_pdf = [f for f in os.listdir(PASTA_PDFS) if f.endswith(".pdf")]
@@ -91,30 +91,25 @@ def run_pipeline():
             json.dump(base_geral, f, ensure_ascii=False, indent=2)
         set_stage(0, "done")
 
-        # ETAPA 2 — Base
         set_stage(1, "running")
         base_geral = carregar_base(CAMINHO_JSON)
         if not base_geral:
             raise Exception("Base vazia após extração.")
         set_stage(1, "done")
 
-        # ETAPA 3 — Embeddings
         set_stage(2, "running")
         model = carregar_modelo()
         embeddings = gerar_embeddings(model, base_geral)
         set_stage(2, "done")
 
-        # ETAPA 4 — FAISS
         set_stage(3, "running")
         index = criar_ou_carregar_index(CAMINHO_INDEX, embeddings)
         set_stage(3, "done")
 
-        # ETAPA 5 — Gemini
         set_stage(4, "running")
         gemini = configurar_gemini()
         set_stage(4, "done")
 
-        # ETAPA 6 — Markdown
         set_stage(5, "running")
         gerar_markdowns(
             base_geral=base_geral,
@@ -127,7 +122,6 @@ def run_pipeline():
         )
         set_stage(5, "done")
 
-        # ETAPA 7 — Apostila PDF
         set_stage(6, "running")
         gerar_apostilas_por_curso(
             pasta_markdown=PASTA_MARKDOWN,
@@ -136,12 +130,10 @@ def run_pipeline():
         )
         set_stage(6, "done")
 
-        # Localiza o PDF gerado
         pdfs = [f for f in os.listdir(PASTA_PDF) if f.endswith(".pdf")]
         if pdfs:
             pipeline_state["apostila_path"] = os.path.join(PASTA_PDF, pdfs[0])
 
-        # PAUSA para aprovação do professor
         pipeline_state["status"] = "awaiting_approval"
 
     except Exception as e:
@@ -158,6 +150,7 @@ def run_video():
         groq_token = os.getenv("GROQ_TOKEN")
         if not groq_token:
             raise Exception("GROQ_TOKEN não encontrado.")
+
         gerar_videos_por_disciplina(
             pasta_markdown=PASTA_MARKDOWN,
             pasta_saida=PASTA_VIDEO,
@@ -165,9 +158,26 @@ def run_video():
         )
         set_stage(7, "done")
 
-        videos = [f for f in os.listdir(PASTA_VIDEO) if f.endswith((".mp4", ".avi", ".mov"))]
-        if videos:
-            pipeline_state["video_path"] = os.path.join(PASTA_VIDEO, videos[0])
+        # ✅ CORRIGIDO — salva TODOS os vídeos no dicionário
+        print(f"🔍 Procurando vídeos em: {PASTA_VIDEO}")
+        print(f"🔍 Pasta existe? {os.path.exists(PASTA_VIDEO)}")
+
+        video_paths = {}
+        for root, dirs, files in os.walk(PASTA_VIDEO):
+            print(f"📁 Entrando em: {root}")
+            print(f"   Arquivos: {files}")
+            for f in files:
+                if f.endswith((".mp4", ".avi", ".mov")):
+                    disciplina = os.path.basename(root)
+                    caminho_completo = os.path.join(root, f)
+                    print(f"✅ Encontrou: {disciplina} → {caminho_completo}")
+                    video_paths[disciplina] = caminho_completo
+                    
+
+        print(f"🎬 video_paths final: {video_paths}")
+        if video_paths:
+            pipeline_state["video_paths"] = video_paths
+            pipeline_state["video_path"] = list(video_paths.values())[0]
 
         pipeline_state["status"] = "done"
 
@@ -184,7 +194,7 @@ app = FastAPI(title="ATRIA San Marino API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # em produção troque pelo domínio do front
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -192,7 +202,6 @@ app.add_middleware(
 
 @app.post("/upload")
 async def upload_pdfs(files: list[UploadFile] = File(...)):
-    """Recebe os PDFs e inicia o pipeline."""
     if pipeline_state["status"] == "running":
         return JSONResponse(status_code=400, content={"error": "Pipeline já está em execução."})
 
@@ -212,18 +221,17 @@ async def upload_pdfs(files: list[UploadFile] = File(...)):
 
 @app.get("/status")
 def get_status():
-    """Retorna o estado atual do pipeline."""
     return {
         "status": pipeline_state["status"],
         "stage": pipeline_state["stage"],
         "stages": pipeline_state["stages"],
         "error": pipeline_state["error"],
+        "videos": list(pipeline_state["video_paths"].keys()),  # ✅ lista de disciplinas disponíveis
     }
 
 
 @app.get("/download/apostila")
 def download_apostila():
-    """Retorna o PDF da apostila gerada."""
     path = pipeline_state.get("apostila_path")
     if not path or not os.path.exists(path):
         return JSONResponse(status_code=404, content={"error": "Apostila não encontrada."})
@@ -232,7 +240,6 @@ def download_apostila():
 
 @app.post("/approve")
 def approve():
-    """Professor aprova — dispara a geração do vídeo."""
     if pipeline_state["status"] != "awaiting_approval":
         return JSONResponse(status_code=400, content={"error": "Pipeline não está aguardando aprovação."})
 
@@ -240,19 +247,37 @@ def approve():
     thread = threading.Thread(target=run_video, daemon=True)
     thread.start()
 
-    return {"message": "Aprovado. Gerando vídeo..."}
+    return {"message": "Aprovado. Gerando vídeos..."}
 
 
 @app.post("/reject")
 def reject():
-    """Professor rejeita — reseta o pipeline."""
     reset_state()
     return {"message": "Pipeline resetado. Faça novo upload."}
 
 
+# ✅ NOVO — lista todos os vídeos prontos
+@app.get("/download/videos")
+def list_videos():
+    paths = pipeline_state.get("video_paths", {})
+    if not paths:
+        return JSONResponse(status_code=404, content={"error": "Nenhum vídeo encontrado."})
+    return {"videos": list(paths.keys())}
+
+
+# ✅ NOVO — baixa vídeo por nome da disciplina
+@app.get("/download/video/{nome}")
+def download_video_por_nome(nome: str):
+    paths = pipeline_state.get("video_paths", {})
+    path = paths.get(nome)
+    if not path or not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": f"Vídeo '{nome}' não encontrado."})
+    return FileResponse(path, media_type="video/mp4", filename=f"{nome}.mp4")
+
+
+# ✅ MANTIDO por compatibilidade com frontend antigo
 @app.get("/download/video")
 def download_video():
-    """Retorna o vídeo gerado."""
     path = pipeline_state.get("video_path")
     if not path or not os.path.exists(path):
         return JSONResponse(status_code=404, content={"error": "Vídeo não encontrado."})
