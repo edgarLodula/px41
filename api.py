@@ -18,6 +18,8 @@ from src.output_formatter.markdown_generator import gerar_markdowns
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
 
+
+
 # =========================
 # PATHS
 # =========================
@@ -31,6 +33,8 @@ LOGO_PATH     = "assets/logo.jpeg"
 CAMINHO_JSON  = os.path.join(PASTA_JSON, "base_geral.json")
 CAMINHO_INDEX = os.path.join(PASTA_INDEX, "faiss_index.bin")
 
+from dotenv import load_dotenv
+load_dotenv()
 # =========================
 # ESTADO GLOBAL DO PIPELINE
 # =========================

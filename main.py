@@ -1,9 +1,9 @@
 import os
 import json
-
+from dotenv import load_dotenv
 # EXTRAÇÃO
 from src.syllabus_extractor.pdf_processor import processar_pdf, processar_semantico
-
+load_dotenv()
 # RAG
 from src.content_generation.data_loader import carregar_base
 from src.content_generation.embedding_model import carregar_modelo, gerar_embeddings

@@ -50,12 +50,13 @@ def gerar_markdowns(
             query = f"{disciplina} {item.get('ementa', '')} {item.get('conteudo', '')}"
 
             chunks = buscar_chunks(query, model, index, base_geral)
-
+            contexto = ""
             contexto = "\n\n".join([
                 f"{c['disciplina']}\n{c['conteudo']}"
                 for c in chunks
                 if c["disciplina"].lower() != disciplina.lower()
             ])
+            contexto = contexto[:3000]
 
             # -------------------------
             # GERA DOCUMENTO
@@ -67,7 +68,7 @@ def gerar_markdowns(
                 item.get("conteudo", ""),
                 contexto
             )
-
+            
             # -------------------------
             # CRIA PASTA DO CURSO
             # -------------------------
@@ -96,7 +97,7 @@ def gerar_markdowns(
 
             print("   ✅ Salvo")
 
-            time.sleep(4)  # evita rate limit
+            time.sleep(35)  # evita rate limit
 
         except Exception as e:
             print(f"   ❌ Erro: {e}")

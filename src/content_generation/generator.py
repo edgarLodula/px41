@@ -1,7 +1,7 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import os
 import time
-
 
 # -------------------------------
 # CONFIGURAÇÃO DO GEMINI
@@ -15,19 +15,9 @@ def configurar_gemini():
             "Use: set GEMINI_API_KEY=sua_chave"
         )
 
-    genai.configure(api_key=api_key)
-
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        generation_config={
-            "temperature": 0.3,
-            "max_output_tokens": 8192
-        }
-    )
-
+    client = genai.Client(api_key=api_key)
     print("✅ Gemini configurado")
-    return model
-
+    return client
 
 # -------------------------------
 # PROMPT BASE
@@ -48,11 +38,10 @@ O documento deve conter:
 Seja didático, claro e detalhado.
 """
 
-
 # -------------------------------
 # GERAÇÃO DE CONTEÚDO
 # -------------------------------
-def gerar_documento(model, disciplina, ementa, conteudo, contexto):
+def gerar_documento(client, disciplina, ementa, conteudo, contexto):
     prompt = f"""{SYSTEM_PROMPT}
 
 --- DISCIPLINA ---
@@ -70,16 +59,23 @@ Conteúdo:
 Gere o material:
 """
 
-    for tentativa in range(5):
+    for tentativa in range(3):
         try:
-            resposta = model.generate_content(prompt)
+            resposta = client.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.3,
+                    max_output_tokens=2048,
+                )
+            )
             return resposta.text
 
         except Exception as e:
             erro = str(e)
 
             if "429" in erro or "503" in erro:
-                espera = (2 ** tentativa) * 10
+                espera = (2 ** tentativa) * 2
                 print(f"⚠️ Aguardando {espera}s...")
                 time.sleep(espera)
             else:
