@@ -16,31 +16,67 @@ def gerar_html_completo(conteudos_html, nome_curso, logo_base64):
 
         <style>
             body {{
-                font-family: "Times New Roman", Arial, sans-serif;
+                font-family: Arial, sans-serif;
                 font-size: 12pt;
-                line-height: 1.5;
-                text-align: justify;
-                margin: 3cm 2cm 2cm 3cm;
+                line-height: 1.6;
+                margin: 2.5cm 2cm 2cm 2.5cm;
+                color: #222;
             }}
 
             h1 {{
-                font-size: 16pt;
+                font-size: 18pt;
                 margin-top: 30px;
+                border-bottom: 2px solid #000;
+                padding-bottom: 5px;
             }}
 
             h2 {{
-                font-size: 14pt;
+                font-size: 15pt;
+                margin-top: 25px;
+                color: #333;
+            }}
+
+            h3 {{
+                font-size: 13pt;
                 margin-top: 20px;
+            }}
+
+            p {{
+                margin: 10px 0;
+                text-align: justify;
+            }}
+
+            ul {{
+                margin-left: 20px;
             }}
 
             .capa {{
                 text-align: center;
-                margin-top: 200px;
+                margin-top: 180px;
+            }}
+
+            .capa h1 {{
+                border: none;
             }}
 
             .page-break {{
                 page-break-after: always;
             }}
+
+            .disciplina {{
+                page-break-before: always;
+            }}
+
+            .rodape {{
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 10pt;
+                color: gray;
+            }}
+
         </style>
     </head>
 
@@ -58,10 +94,14 @@ def gerar_html_completo(conteudos_html, nome_curso, logo_base64):
         <!-- CONTEÚDO -->
         {conteudos_html}
 
+        <!-- RODAPÉ -->
+        <div class="rodape">
+            Apostila gerada automaticamente
+        </div>
+
     </body>
     </html>
     """
-
 
 def gerar_apostilas_por_curso(
     pasta_markdown="data/output/markdown",

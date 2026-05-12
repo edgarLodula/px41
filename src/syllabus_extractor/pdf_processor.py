@@ -67,53 +67,7 @@ def processar_pdf(caminho_pdf: str) -> list[dict]:
     disciplina_atual = None
     texto_acumulado = ""
 
-    for i, page in enumerate(doc):
-        print(f"  Processando página {i + 1}/{doc.page_count}...")
-        texto = extrair_texto_pagina(page)
-
-        if not texto.strip():
-            continue
-
-        # Detecta se é início de nova disciplina
-        # Heurística: se o texto começa com um título curto (< 120 chars) antes da primeira seção numerada
-        linhas = [l.strip() for l in texto.splitlines() if l.strip()]
-        primeira_linha = linhas[0] if linhas else ""
-
-        tem_nova_disciplina = (
-            primeira_linha
-            and len(primeira_linha) < 120
-            and not re.match(r"^\d+[\.\)]\s", primeira_linha)
-            and "Documento de Estudo" not in primeira_linha
-        )
-
-        if tem_nova_disciplina and disciplina_atual and disciplina_atual != primeira_linha:
-            # Salva a disciplina anterior
-            if texto_acumulado.strip():
-                base_final.append({
-                    "pagina": i,
-                    "disciplina": disciplina_atual,
-                    "ementa": _extrair_ementa(texto_acumulado),
-                    "conteudo": _extrair_conteudo(texto_acumulado),
-                })
-            disciplina_atual = primeira_linha
-            texto_acumulado = texto
-        else:
-            if disciplina_atual is None:
-                disciplina_atual = detectar_disciplina(texto)
-            texto_acumulado += "\n" + texto
-
-    # Salva a última disciplina
-    if disciplina_atual and texto_acumulado.strip():
-        base_final.append({
-            "pagina": doc.page_count,
-            "disciplina": disciplina_atual,
-            "ementa": _extrair_ementa(texto_acumulado),
-            "conteudo": _extrair_conteudo(texto_acumulado),
-        })
-
-    doc.close()
-    print(f"✅ {len(base_final)} disciplinas extraídas")
-    return base_final
+    
 
 
 # =========================

@@ -1,8 +1,12 @@
 import os
 import json
+import pandas as pd
 from dotenv import load_dotenv
 # EXTRAÇÃO
 from src.syllabus_extractor.pdf_processor import processar_pdf, processar_semantico
+from src.syllabus_extractor.csv_processor import extrair_base_csv
+from src.pdf_csv.pdf_csv import extrair_pdf_para_csv
+
 load_dotenv()
 # RAG
 from src.content_generation.data_loader import carregar_base
@@ -20,55 +24,37 @@ from src.video_generator.pipeline_video import gerar_videos_por_disciplina
 # =========================
 # PATHS
 # =========================
-PASTA_PDFS = "data/input"
+PASTA_PDFS = "data/input/"
 PASTA_JSON = "data/output/json"
 PASTA_INDEX = "data/output/faiss"
 PASTA_MARKDOWN = "data/output/markdown"
 PASTA_PDF = "data/output/workbooks_pdf"
 PASTA_VIDEO = "data/output/videos"
+PASTA_CSV="data/input/planilhas_geradas"
 
 LOGO_PATH = "assets/logo.jpeg"
 
 CAMINHO_JSON = os.path.join(PASTA_JSON, "base_geral.json")
 CAMINHO_INDEX = os.path.join(PASTA_INDEX, "faiss_index.bin")
-
+CAMINHO_PDF="data/input/Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf"
+gemini_token = os.getenv("GEMINI_API_KEY")
 
 # =========================
 # EXTRAÇÃO
 # =========================
-def extrair_base():
-    os.makedirs(PASTA_JSON, exist_ok=True)
-
-    arquivos_pdf = [f for f in os.listdir(PASTA_PDFS) if f.endswith(".pdf")]
-
-    if not arquivos_pdf:
-        print("⚠️ Nenhum PDF encontrado em data/input")
-        return
-
-    base_geral = []
-
-    for arquivo in arquivos_pdf:
-        caminho_pdf = os.path.join(PASTA_PDFS, arquivo)
-
-        print(f"\n📄 Processando PDF: {arquivo}")
-
-        paginas = processar_pdf(caminho_pdf)
-        base_ia = processar_semantico(paginas, arquivo)
-
-        base_geral.extend(base_ia)
-
-    with open(CAMINHO_JSON, "w", encoding="utf-8") as f:
-        json.dump(base_geral, f, ensure_ascii=False, indent=2)
-
-    print(f"\n✅ JSON salvo em: {CAMINHO_JSON}")
-
+heyGen_token = os.getenv("HEYGEN_API_KEY")
+gemini_token = os.getenv("GEMINI_API_KEY")
+    
 
 # =========================
 # MAIN
 # =========================
 def main():
     # 1. EXTRAÇÃO
-    extrair_base()
+    nome_csv = os.path.basename(CAMINHO_PDF).replace(".pdf", ".csv")
+    caminho_csv = os.path.join(PASTA_CSV, nome_csv)
+    extrair_pdf_para_csv(CAMINHO_PDF, caminho_csv)
+    extrair_base_csv(CAMINHO_PDF)
 
     # 2. BASE
     base_geral = carregar_base(CAMINHO_JSON)
@@ -105,24 +91,24 @@ def main():
         pasta_pdf=PASTA_PDF,
         logo_path=LOGO_PATH
     )
-
     # 8. VIDEO
-    groq_token = os.getenv("GROQ_TOKEN")
+    
 
-    if not groq_token:
-        print("⚠️ GROQ_TOKEN não encontrado. Pulando geração de vídeos.")
+    if not heyGen_token:
+        print("⚠️ Apis não encontradas. Pulando geração de vídeos.")
     else:
         try:
             gerar_videos_por_disciplina(
                 pasta_markdown=PASTA_MARKDOWN,
                 pasta_saida=PASTA_VIDEO,
-                groq_token=groq_token
+                gemini_token=gemini_token,
+                heyGen_token=heyGen_token
             )
         except Exception as e:
             print(f"❌ Erro na geração de vídeos: {e}")
 
     print("\n🎯 Pipeline finalizado!")
-
+    
 
 # =========================
 # ENTRYPOINT
