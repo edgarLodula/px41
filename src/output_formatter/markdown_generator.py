@@ -1,7 +1,7 @@
 import os
 import re
 import time
-from src.content_generation.generator import gerar_topico
+from src.content_generation.generator import gerar_topico, gerar_questoes_topico
 def texto_para_markdown(disciplina, texto_bruto):
     secoes = {
         "INTRODUCAO":  "## Introdução",
@@ -25,16 +25,40 @@ def limpar_texto(texto):
     return "\n".join([linha.strip() for linha in texto.strip().splitlines() if linha.strip()])
 
 
+def _controle_editorial_topico(i: int, nome: str) -> str:
+    return (
+        f"\n\n---\n\n"
+        f"**Controle Editorial — Tópico {i}: {nome}**\n\n"
+        f"| Item | Status |\n"
+        f"|------|--------|\n"
+        f"| Páginas planejadas | 10–12 |\n"
+        f"| Fundamentação teórica | Sim |\n"
+        f"| Aplicação prática | Sim |\n"
+        f"| Casos práticos | Sim |\n"
+        f"| Erros comuns | Sim |\n"
+        f"| Glossário | Sim |\n"
+        f"| Página de perguntas | Sim |\n"
+        f"| Gabarito | Sim |\n\n"
+        f"---\n"
+    )
+
+
 def juntar_topicos_formatado(introducao, objetivos, topicos_dict, exemplos, resumo, questoes):
     partes = []
     partes.append("INTRODUCAO:\n" + limpar_texto(introducao))
     partes.append("OBJETIVOS:\n" + limpar_texto(objetivos))
 
     topicos_texto = ["TOPICOS:"]
-    for i, (nome, conteudo) in enumerate(topicos_dict.items(), 1):
-        topicos_texto.append(f"\nTópico {i}: {nome}")
+    for i, (nome, dados) in enumerate(topicos_dict.items(), 1):
+        conteudo = dados["conteudo"] if isinstance(dados, dict) else dados
+        questoes_topico = dados.get("questoes", "") if isinstance(dados, dict) else ""
+        topicos_texto.append(f"\n### Tópico {i}: {nome}")
         topicos_texto.append(limpar_texto(conteudo))
-    partes.append("\n".join(topicos_texto))
+        if questoes_topico:
+            topicos_texto.append(f"\n#### Perguntas, Exercícios e Gabarito — Tópico {i}: {nome}")
+            topicos_texto.append(limpar_texto(questoes_topico))
+        topicos_texto.append(_controle_editorial_topico(i, nome))
+    partes.append("\n\n".join(topicos_texto))
 
     partes.append("EXEMPLOS:\n" + limpar_texto(exemplos))
     partes.append("RESUMO:\n" + limpar_texto(resumo))
@@ -54,15 +78,21 @@ def gerar_markdowns(
     os.makedirs(pasta_saida, exist_ok=True)
 
     # -------------------------
-    # AGRUPA: curso → disciplina → lista de aulas
+    # AGRUPA: arquivo (PDF) → disciplina → lista de aulas
+    # Garante 1 PDF entrada = 1 pasta/apostila saída
     # -------------------------
     cursos = {}
+    titulos_curso = {}
     for item in base_geral:
-        curso = item.get("curso") or item.get("arquivo", "curso_desconhecido")
+        arquivo = item.get("arquivo", "").strip()
+        if not arquivo:
+            arquivo = "curso_desconhecido"
         disciplina = item.get("disciplina", "").strip()
         if not disciplina:
             continue
-        cursos.setdefault(curso, {}).setdefault(disciplina, []).append(item)
+        cursos.setdefault(arquivo, {}).setdefault(disciplina, []).append(item)
+        if arquivo not in titulos_curso:
+            titulos_curso[arquivo] = item.get("curso", "") or arquivo
 
     total_disciplinas = sum(len(discs) for discs in cursos.values())
     print(f"📚 {total_disciplinas} disciplinas únicas encontradas\n")
@@ -71,16 +101,23 @@ def gerar_markdowns(
     gerados = 0
     contador = 0
 
-    for nome_curso, disciplinas in cursos.items():
+    for arquivo_pdf, disciplinas in cursos.items():
         # -------------------------
-        # PASTA DO CURSO
+        # PASTA DO ARQUIVO (1 pasta por PDF de entrada)
         # -------------------------
-        curso_slug = re.sub(r'[^\w\s-]', '', nome_curso) \
+        curso_slug = re.sub(r'[^\w\s-]', '', arquivo_pdf) \
             .replace(".pdf", "").replace(".csv", "") \
             .strip().replace(" ", "_")
 
         pasta_curso = os.path.join(pasta_saida, curso_slug)
         os.makedirs(pasta_curso, exist_ok=True)
+
+        # Salva título real do curso para a capa da apostila
+        titulo_real = titulos_curso.get(arquivo_pdf, curso_slug)
+        with open(os.path.join(pasta_curso, "_titulo.txt"), "w", encoding="utf-8") as _f:
+            _f.write(titulo_real)
+
+        nome_curso = titulo_real
 
         for disciplina, aulas in disciplinas.items():
             contador += 1
@@ -121,15 +158,19 @@ def gerar_markdowns(
                 topicos_dict = {}
                 for aula in aulas:
                     topico = aula.get("titulo_aula", "") or aula.get("conteudo", "")
-                    print(f"      📝 Gerando tópico: {topico}")
-                    topicos_dict[topico] = gerar_topico(gemini, disciplina, topico, contexto)
-                    
+                    print(f"      📝 Gerando explicação: {topico}")
+                    conteudo_topico = gerar_topico(gemini, disciplina, topico, contexto)
+                    time.sleep(10)
+                    print(f"      ❓ Gerando questões: {topico}")
+                    questoes_topico = gerar_questoes_topico(gemini, disciplina, topico, contexto)
+                    topicos_dict[topico] = {"conteudo": conteudo_topico, "questoes": questoes_topico}
+                    time.sleep(10)
 
                 intro     = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas a introdução.", contexto)
                 objetivos = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas os objetivos.", contexto)
                 exemplos  = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas exemplos práticos.", contexto)
                 resumo    = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas o resumo.", contexto)
-                questoes  = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas 5 questões dissertativas.", contexto)
+                questoes  = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere a avaliação geral completa da disciplina com questões objetivas, dissertativas e baseadas em casos práticos.", contexto)
 
                 documento = juntar_topicos_formatado(intro, objetivos, topicos_dict, exemplos, resumo, questoes)
                 

@@ -4,7 +4,7 @@ from src.video_generator.roteiro_generator import gerar_roteiro
 from src.video_generator.video_generator import gerar_video
 
 
-def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, gemini_token, heyGen_token):
+def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGen_token):
     if not heyGen_token:
         raise ValueError("❌ heyGen_token não encontrado. Configure no .env ou sistema.")
 
@@ -34,19 +34,24 @@ def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, gemini_token, heyGe
             try:
                 # pasta da disciplina
                 pasta_disciplina = os.path.join(pasta_curso_video, disciplina)
+                pasta_roteiro = os.path.join(pasta_disciplina, "roteiro")
                 os.makedirs(pasta_disciplina, exist_ok=True)
+                os.makedirs(pasta_roteiro, exist_ok=True)
 
-                
                 caminho_video = os.path.join(pasta_disciplina, "video.mp4")
+                caminho_roteiro = os.path.join(pasta_roteiro, f"{disciplina}.txt")
 
                 with open(caminho_md, "r", encoding="utf-8") as f:
                     texto = f.read()
 
                 # 1. Roteiro
-                roteiro = gerar_roteiro(texto, disciplina, gemini_token)
+                roteiro = gerar_roteiro(texto, disciplina, openai_token)
 
+                with open(caminho_roteiro, "w", encoding="utf-8") as f:
+                    f.write(roteiro)
+                print(f"   📄 Roteiro salvo em: {caminho_roteiro}")
 
-                # 4. Vídeo
+                # 2. Vídeo
                 gerar_video(roteiro, caminho_video)
 
                 print(f"   ✅ Finalizado: {disciplina}")

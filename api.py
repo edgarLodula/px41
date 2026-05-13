@@ -13,7 +13,7 @@ from src.content_generation.data_loader import carregar_base
 from src.content_generation.embedding_model import carregar_modelo, gerar_embeddings
 from src.content_generation.faiss_index import criar_ou_carregar_index
 from src.content_generation.rag_pipeline import buscar_chunks
-from src.content_generation.generator import configurar_gemini, gerar_documento
+from src.content_generation.generator import configurar_openai, gerar_documento
 from src.output_formatter.markdown_generator import gerar_markdowns
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
@@ -45,7 +45,7 @@ pipeline_state = {
         {"name": "Carregamento da base", "status": "waiting"},
         {"name": "Embeddings",           "status": "waiting"},
         {"name": "Índice FAISS",         "status": "waiting"},
-        {"name": "Configuração Gemini",  "status": "waiting"},
+        {"name": "Configuração OpenAI",  "status": "waiting"},
         {"name": "Geração de Markdown",  "status": "waiting"},
         {"name": "Apostila PDF",         "status": "waiting"},
         {"name": "Geração de Vídeo",     "status": "waiting"},
@@ -107,7 +107,7 @@ def run_pipeline():
         set_stage(3, "done")
 
         set_stage(4, "running")
-        gemini = configurar_gemini()
+        gemini = configurar_openai()
         set_stage(4, "done")
 
         set_stage(5, "running")
@@ -147,14 +147,15 @@ def run_pipeline():
 def run_video():
     try:
         set_stage(7, "running")
-        groq_token = os.getenv("GROQ_TOKEN")
-        if not groq_token:
-            raise Exception("GROQ_TOKEN não encontrado.")
+        openai_token = os.getenv("OPENAI_API_KEY")
+        if not openai_token:
+            raise Exception("OPENAI_API_KEY não encontrada.")
 
         gerar_videos_por_disciplina(
             pasta_markdown=PASTA_MARKDOWN,
             pasta_saida=PASTA_VIDEO,
-            groq_token=groq_token
+            openai_token=openai_token,
+            heyGen_token=os.getenv("HEYGEN_API_KEY")
         )
         set_stage(7, "done")
 

@@ -7,12 +7,14 @@ então tudo que consome o JSON (gerar_markdowns, etc.) continua funcionando.
 
 import os
 import json
+import csv
 import pandas as pd
 import pdfplumber
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-CSV_PATH    = "../../data/input/planilhas_geradas/planilha.csv"
+CSV_PATH    = "../../data/input/planilhas_geradas/Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica.docx.csv"
 PASTA_JSON  = "../../data/output/json"
+PASTA_CSV = "../../data/input/planilhas_geradas"
 CAMINHO_JSON = os.path.join(PASTA_JSON, "base_curso.json")
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -83,44 +85,115 @@ def ler_csv(csv_path: str) -> list[dict]:
     print(f"✅ CSV lido: {len(registros)} registros encontrados")
     return registros
 
-
-def extrair_base_csv(CAMINHO_PDF):
-    """
-    Substitui o extrair_base() original.
-    Agora extrai direto do PDF em vez de ler CSV manual.
-    """
+def transformar_csv_em_json(nome_csv: str, nome_json: str):
     os.makedirs(PASTA_JSON, exist_ok=True)
 
-    if not os.path.exists(CAMINHO_PDF):
-        print(f"⚠️  PDF não encontrado em: {CAMINHO_PDF}")
+    caminho_csv = os.path.join(PASTA_CSV, nome_csv)
+    caminho_json = os.path.join(PASTA_JSON, nome_json)
+
+    if not os.path.exists(caminho_csv):
+        print(f"⚠️ CSV não encontrado: {caminho_csv}")
         return
 
-    print(f"\n📄 Processando PDF: {CAMINHO_PDF}")
+    registros = []
+
+    with open(caminho_csv, "r", encoding="utf-8-sig") as arquivo_csv:
+        leitor = csv.DictReader(arquivo_csv)
+
+        for linha in leitor:
+            registro = {
+                "curso": linha.get("curso", "").strip(),
+                "disciplina": linha.get("disciplina", "").strip(),
+                "ementa": linha.get("ementa", "").strip(),
+                "conteudo_programatico": [
+                    item.strip()
+                    for item in linha.get("conteudo_programatico", "").split("\n")
+                    if item.strip()
+                ]
+            }
+
+            registros.append(registro)
+
+    # estrutura final do JSON
+    estrutura_final = {
+        "total_registros": len(registros),
+        "dados": registros
+    }
+
+    with open(caminho_json, "w", encoding="utf-8") as arquivo_json:
+        json.dump(estrutura_final, arquivo_json, ensure_ascii=False, indent=2)
+
+    print(f"✅ JSON salvo em: {caminho_json}")
+    print(f"📦 {len(registros)} registros convertidos")
+
+def extrair_base_csv(
+    caminho_pdf: str,
+    pasta_csv: str = "data/input/planilhas_geradas",
+    pasta_json: str = "data/output/json"
+) -> list:
+    """
+    Lê o CSV gerado por extrair_pdf_para_csv (colunas: Curso, Disciplina, Ementa,
+    Conteudo_Programatico) e converte para lista de registros no formato esperado
+    por gerar_markdowns e gerar_embeddings.
+
+    Cada tópico separado por '|' no Conteudo_Programatico vira um registro
+    individual (titulo_aula), permitindo que gerar_markdowns gere uma seção
+    por tópico dentro da disciplina.
+
+    Salva um JSON por PDF em pasta_json e retorna a lista de registros.
+    """
+    nome_base = os.path.basename(caminho_pdf).replace(".pdf", "")
+    caminho_csv = os.path.join(pasta_csv, nome_base + ".csv")
+    caminho_json = os.path.join(pasta_json, nome_base + ".json")
+
+    os.makedirs(pasta_json, exist_ok=True)
+
+    if not os.path.exists(caminho_csv):
+        print(f"⚠️ CSV não encontrado: {caminho_csv}")
+        return []
 
     registros = []
-    with pdfplumber.open(CAMINHO_PDF) as pdf:
-        for pagina in pdf.pages:
-            for tabela in (pagina.extract_tables() or []):
-                for linha in tabela:
-                    if not linha[0] or linha[0].strip() in ("", "Disciplina"):
-                        continue
 
-                    registros.append({
-                        "curso":                  "Técnico em Enfermagem",
-                        "disciplina":             (linha[0] or "").strip(),
-                        "ementa":                 (linha[1] or "").strip(),
-                        "conteudo_programatico": [
-                            c.strip()
-                            for c in (linha[2] or "").split("\n")
-                            if c.strip()
-                        ]
-                    })
+    with open(caminho_csv, "r", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row_idx, linha in enumerate(reader):
+            curso        = linha.get("Curso", "").strip()
+            disciplina   = linha.get("Disciplina", "").strip()
+            ementa       = linha.get("Ementa", "").strip()
+            conteudo_raw = linha.get("Conteudo_Programatico", "").strip()
 
-    with open(CAMINHO_JSON, "w", encoding="utf-8") as f:
+            if not disciplina:
+                continue
+
+            # Cada item separado por "|" vira um tópico/aula independente
+            topicos = [t.strip() for t in conteudo_raw.split("|") if t.strip()]
+            if not topicos:
+                topicos = [disciplina]
+
+            for aula_idx, topico in enumerate(topicos):
+                registros.append({
+                    "arquivo":         nome_base,
+                    "pagina":          row_idx,
+                    "chunk_id":        f"{row_idx}_{aula_idx}",
+                    "curso":           curso,
+                    "disciplina":      disciplina,
+                    "ementa":          ementa,
+                    "aula":            aula_idx + 1,
+                    "titulo_aula":     topico,
+                    "conteudo":        topico,
+                    "conceitos_chave": "",
+                    "exemplos":        "",
+                    "exercicios":      "",
+                    "texto_embedding": f"{curso}\n{disciplina}\n{ementa}\n{topico}",
+                })
+
+    with open(caminho_json, "w", encoding="utf-8") as f:
         json.dump(registros, f, ensure_ascii=False, indent=2)
 
-    print(f"\n✅ JSON salvo em: {CAMINHO_JSON}  ({len(registros)} registros)")
+    n_disc = len(set(r["disciplina"] for r in registros))
+    print(f"✅ JSON salvo: {caminho_json} ({len(registros)} tópicos | {n_disc} disciplinas)")
+    return registros
 
 
 if __name__ == "__main__":
-    extrair_base_csv()
+    transformar_csv_em_json()

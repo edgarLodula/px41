@@ -4,14 +4,17 @@ import time
 
 def gerar_video(roteiro, caminho_saida):
     token = os.getenv("HEYGEN_API_KEY")
+    avatar_id = os.getenv("HEYGEN_AVATAR_ID")
+    voice_id = os.getenv("HEYGEN_VOICE_ID")
+
+    faltando = [k for k, v in {"HEYGEN_API_KEY": token, "HEYGEN_AVATAR_ID": avatar_id, "HEYGEN_VOICE_ID": voice_id}.items() if not v]
+    if faltando:
+        raise Exception(f"Variáveis de ambiente ausentes no .env: {', '.join(faltando)}")
 
     headers = {
         "X-Api-Key": token,
         "Content-Type": "application/json"
     }
-
-    avatar_id = os.getenv("HEYGEN_AVATAR_ID")
-    voice_id = os.getenv("HEYGEN_VOICE_ID")
 
     # 1. Criar vídeo
     payload = {
@@ -34,19 +37,38 @@ def gerar_video(roteiro, caminho_saida):
     }
 
     response = requests.post(
-    "https://api.heygen.com/v2/video/generate",
-    headers=headers,
-    json=payload
-)
-    video_id = response.json()["data"]["video_id"]
+        "https://api.heygen.com/v2/video/generate",
+        headers=headers,
+        json=payload
+    )
+
+    resp_json = response.json()
+    data = resp_json.get("data")
+
+    if not data or not data.get("video_id"):
+        raise Exception(
+            f"HeyGen não retornou video_id. HTTP {response.status_code}. "
+            f"Resposta: {resp_json}"
+        )
+
+    video_id = data["video_id"]
 
     # 2. Polling
     for _ in range(30):
         time.sleep(10)
-        status = requests.get(
+
+        poll_resp = requests.get(
             f"https://api.heygen.com/v1/video_status.get?video_id={video_id}",
             headers=headers
-        ).json()["data"]
+        )
+        poll_json = poll_resp.json()
+        status = poll_json.get("data")
+
+        if not status:
+            raise Exception(
+                f"HeyGen não retornou status. HTTP {poll_resp.status_code}. "
+                f"Resposta: {poll_json}"
+            )
 
         if status["status"] == "completed":
             # 3. Download

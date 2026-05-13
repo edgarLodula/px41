@@ -1,20 +1,13 @@
 import os
-import requests
 import time
+from openai import OpenAI
 
 
 def gerar_roteiro(texto, disciplina, token):
-    for tentativa in range(3):
-        try:
-            headers = {"Content-Type": "application/json"}
-            modelo = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    client = OpenAI(api_key=token)
+    modelo = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-            payload = {
-                "contents": [
-                    {
-                        "parts": [
-                            {
-                                "text": f"""Você é um roteirista especialista em vídeo-aulas técnicas para a disciplina de {disciplina}.
+    prompt = f"""Você é um roteirista especialista em vídeo-aulas técnicas para a disciplina de {disciplina}.
 Seu objetivo é criar roteiros de vídeo-aula inaugurais altamente engajadores,
 seguindo rigorosamente um formato padronizado com blocos, timecodes e marcações de produção.
 
@@ -108,37 +101,23 @@ Notas Estratégicas da Marina para a Diretoria:
 
 {texto[:2000]}
 """
-                            }
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "maxOutputTokens": 2000
-                }
-            }
 
-            response = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={token}",
-                headers=headers,
-                json=payload
+    for tentativa in range(3):
+        try:
+            resposta = client.chat.completions.create(
+                model=modelo,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=2000,
             )
-
-            if response.status_code == 403:
-                raise Exception(
-                    f"❌ Acesso negado à Gemini API (403). Verifique se o projeto Google Cloud "
-                    f"tem a API habilitada e se o token GEMINI é válido. Detalhe: {response.text}"
-                )
-
-            response.raise_for_status()
-
-            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-
+            return resposta.choices[0].message.content
         except Exception as e:
             erro = str(e)
-            if "403" in erro or "PERMISSION_DENIED" in erro:
-                raise
-            elif "429" in erro or "503" in erro:
+            if "401" in erro or "authentication" in erro.lower() or "invalid_api_key" in erro.lower():
+                raise Exception(
+                    f"❌ Chave OpenAI inválida. Verifique OPENAI_API_KEY. Detalhe: {erro}"
+                )
+            elif "429" in erro or "503" in erro or "500" in erro:
                 espera = (2 ** tentativa) * 15
                 print(f"⚠️ Rate limit/serviço indisponível. Aguardando {espera}s... (tentativa {tentativa + 1}/3)")
                 time.sleep(espera)
