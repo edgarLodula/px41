@@ -3,8 +3,7 @@ import markdown
 import base64
 import pdfkit
 
-# CONFIG DO WKHTMLTOPDF
-config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
+WKHTMLTOPDF_PATH = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
 
 
 
@@ -153,6 +152,7 @@ def gerar_apostilas_por_curso(
         caminho_pdf = os.path.join(pasta_pdf, nome_pdf)
 
         # ✅ AQUI ESTÁ A CORREÇÃO
+        config = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
         pdfkit.from_string(html_final, caminho_pdf, configuration=config)
 
         print(f"   ✅ PDF gerado: {caminho_pdf}")
