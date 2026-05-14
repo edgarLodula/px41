@@ -1,6 +1,7 @@
 import os
 import json
 import threading
+import tempfile
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -17,6 +18,17 @@ from src.content_generation.generator import configurar_gemini, gerar_documento
 from src.output_formatter.markdown_generator import gerar_markdowns
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
+from src.video_generator.gerador_videos_direto import (
+    novo_job,
+    extrair_markdown_do_pdf,
+    gerar_roteiro,
+    gerar_plano_cenas,
+    gerar_video_heygen,
+    aguardar_video,
+    verificar_status_video,
+    LIMITE_DISCIPLINAS,
+    LIMITE_PALAVRAS,
+)
 
 # =========================
 # PATHS
@@ -147,14 +159,17 @@ def run_pipeline():
 def run_video():
     try:
         set_stage(7, "running")
-        groq_token = os.getenv("GROQ_TOKEN")
-        if not groq_token:
-            raise Exception("GROQ_TOKEN não encontrado.")
+        gemini_token = os.getenv("GEMINI_API_KEY")
+        heygen_token = os.getenv("HEYGEN_API_KEY")
+
+        if not heygen_token:
+            raise Exception("HEYGEN_API_KEY não encontrado.")
 
         gerar_videos_por_disciplina(
             pasta_markdown=PASTA_MARKDOWN,
             pasta_saida=PASTA_VIDEO,
-            groq_token=groq_token
+            gemini_token=gemini_token,
+            heyGen_token=heygen_token
         )
         set_stage(7, "done")
 
@@ -282,3 +297,185 @@ def download_video():
     if not path or not os.path.exists(path):
         return JSONResponse(status_code=404, content={"error": "Vídeo não encontrado."})
     return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
+
+
+# =============================================================================
+# GERADOR DE VÍDEOS DIRETO — /gerador-videos/*
+# Fluxo com aprovação por etapa: PDF → MD → Roteiro → Cenas → Vídeo
+# =============================================================================
+
+_jobs: dict[str, dict] = {}
+
+
+def _extrair_em_background(job_id: str, caminho_pdf: str):
+    """Etapa 1: extrai o markdown do PDF em background."""
+    try:
+        resultado = extrair_markdown_do_pdf(caminho_pdf)
+        _jobs[job_id].update({
+            "state":      "awaiting_md_approval",
+            "disciplina": resultado["disciplina"],
+            "ementa":     resultado["ementa"],
+            "markdown":   resultado["markdown"],
+        })
+    except Exception as e:
+        _jobs[job_id].update({"state": "error", "erro": str(e)})
+    finally:
+        try:
+            os.remove(caminho_pdf)
+        except Exception:
+            pass
+
+
+def _gerar_roteiro_em_background(job_id: str):
+    """Etapa 3: gera o roteiro a partir do markdown aprovado."""
+    job          = _jobs[job_id]
+    gemini_token = os.getenv("GEMINI_API_KEY")
+    try:
+        script = gerar_roteiro(job["markdown"], job["disciplina"], gemini_token)
+        _jobs[job_id].update({"state": "awaiting_script_approval", "script": script})
+    except Exception as e:
+        _jobs[job_id].update({"state": "error", "erro": str(e)})
+
+
+def _gerar_cenas_em_background(job_id: str):
+    """Etapa 5: gera o plano de cenas a partir do roteiro aprovado."""
+    job          = _jobs[job_id]
+    gemini_token = os.getenv("GEMINI_API_KEY")
+    try:
+        scenes = gerar_plano_cenas(job["script"], job["disciplina"], gemini_token)
+        _jobs[job_id].update({"state": "awaiting_scenes_approval", "scenes": scenes})
+    except Exception as e:
+        _jobs[job_id].update({"state": "error", "erro": str(e)})
+
+
+def _gerar_video_em_background(job_id: str):
+    """Etapa 7: gera o vídeo no HeyGen a partir do roteiro + cenas aprovados."""
+    job          = _jobs[job_id]
+    heygen_token = os.getenv("HEYGEN_API_KEY")
+    try:
+        video_id = gerar_video_heygen(job["script"], job["disciplina"], heygen_token)
+        _jobs[job_id]["video_id"] = video_id
+        info = aguardar_video(video_id, heygen_token)
+        _jobs[job_id].update({
+            "state":     "completed",
+            "video_url": info["video_url"],
+            "duration":  info["duration"],
+        })
+    except Exception as e:
+        _jobs[job_id].update({"state": "error", "erro": str(e)})
+
+
+# ─── Iniciar job ──────────────────────────────────────────────────────────────
+
+@app.post("/gerador-videos/iniciar")
+async def gerador_iniciar(file: UploadFile = File(...)):
+    """Recebe o PDF e inicia a extração (etapa 1)."""
+    if not file.filename.lower().endswith(".pdf"):
+        return JSONResponse(status_code=400, content={"error": "Apenas PDFs são aceitos."})
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(await file.read())
+        caminho_pdf = tmp.name
+
+    job = novo_job()
+    _jobs[job["job_id"]] = job
+
+    threading.Thread(
+        target=_extrair_em_background,
+        args=(job["job_id"], caminho_pdf),
+        daemon=True,
+    ).start()
+
+    return {"job_id": job["job_id"]}
+
+
+# ─── Status ──────────────────────────────────────────────────────────────────
+
+@app.get("/gerador-videos/status/{job_id}")
+def gerador_status(job_id: str):
+    """Retorna o job completo (state + conteúdos de cada etapa)."""
+    job = _jobs.get(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
+    return job
+
+
+# ─── Aprovações ───────────────────────────────────────────────────────────────
+
+class AprovacaoMarkdown(dict):
+    pass
+
+
+@app.post("/gerador-videos/aprovar-markdown/{job_id}")
+async def aprovar_markdown(job_id: str, body: dict = {}):
+    """
+    Etapa 2 → 3: usuário aprova (ou edita) o markdown.
+    Body opcional: { "markdown": "conteúdo editado" }
+    """
+    job = _jobs.get(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
+    if job["state"] != "awaiting_md_approval":
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {job['state']}"})
+
+    if "markdown" in body:
+        _jobs[job_id]["markdown"] = body["markdown"]
+
+    _jobs[job_id]["state"] = "generating_script"
+    threading.Thread(target=_gerar_roteiro_em_background, args=(job_id,), daemon=True).start()
+    return {"message": "Markdown aprovado. Gerando roteiro..."}
+
+
+@app.post("/gerador-videos/aprovar-roteiro/{job_id}")
+async def aprovar_roteiro(job_id: str, body: dict = {}):
+    """
+    Etapa 4 → 5: usuário aprova (ou edita) o roteiro.
+    Body opcional: { "script": "roteiro editado" }
+    """
+    job = _jobs.get(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
+    if job["state"] != "awaiting_script_approval":
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {job['state']}"})
+
+    if "script" in body:
+        _jobs[job_id]["script"] = body["script"]
+
+    _jobs[job_id]["state"] = "generating_scenes"
+    threading.Thread(target=_gerar_cenas_em_background, args=(job_id,), daemon=True).start()
+    return {"message": "Roteiro aprovado. Gerando plano de cenas..."}
+
+
+@app.post("/gerador-videos/aprovar-cenas/{job_id}")
+async def aprovar_cenas(job_id: str, body: dict = {}):
+    """
+    Etapa 6 → 7: usuário aprova (ou edita) o plano de cenas.
+    Body opcional: { "scenes": "plano editado" }
+    Após aprovação, envia para o HeyGen.
+    """
+    job = _jobs.get(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
+    if job["state"] != "awaiting_scenes_approval":
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {job['state']}"})
+
+    if "scenes" in body:
+        _jobs[job_id]["scenes"] = body["scenes"]
+
+    _jobs[job_id]["state"] = "generating_video"
+    threading.Thread(target=_gerar_video_em_background, args=(job_id,), daemon=True).start()
+    return {"message": "Cenas aprovadas. Gerando vídeo no HeyGen..."}
+
+
+# ─── HeyGen status direto ────────────────────────────────────────────────────
+
+@app.get("/gerador-videos/heygen-status/{video_id}")
+def gerador_heygen_status(video_id: str):
+    """Consulta status de um video_id direto no HeyGen v3."""
+    heygen_token = os.getenv("HEYGEN_API_KEY")
+    if not heygen_token:
+        return JSONResponse(status_code=500, content={"error": "HEYGEN_API_KEY não configurado."})
+    try:
+        return verificar_status_video(video_id, heygen_token)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})

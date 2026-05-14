@@ -9,6 +9,7 @@ Registro das decisões técnicas tomadas no projeto, com contexto e justificativ
 | [ADR-003](./ADR-003-renomeacao-endpoint-videos.md) | Renomeação do endpoint de listagem de vídeos | Aceito | 2026-05-13 |
 | [ADR-004](./ADR-004-remocao-codigo-morto-frontend.md) | Remoção de código morto no frontend | Aceito | 2026-05-13 |
 | [ADR-005](./ADR-005-script-approval-step-visual.md) | ScriptApprovalStep como etapa visual sem persistência | Aceito (débito técnico) | 2026-05-13 |
+| [ADR-006](./ADR-006-gerador-videos-direto.md) | Gerador de Vídeos Direto (fluxo independente) | Aceito | 2026-05-13 |
 
 ## O que é um ADR?
 
