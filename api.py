@@ -257,7 +257,7 @@ def reject():
 
 
 # ✅ NOVO — lista todos os vídeos prontos
-@app.get("/download/videos")
+@app.get("/videos")
 def list_videos():
     paths = pipeline_state.get("video_paths", {})
     if not paths:

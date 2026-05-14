@@ -138,14 +138,14 @@ def testar_download_apostila_sem_arquivo():
 
 
 def testar_download_videos_sem_arquivo():
-    """GET /download/videos deve retornar 404 se nenhum vídeo foi gerado."""
+    """GET /videos deve retornar 404 se nenhum vídeo foi gerado."""
     print(f"\n{NEGRITO}[6] Listagem de vídeos sem arquivos gerados...{RESET}")
 
-    r = requests.get(f"{BASE_URL}/download/videos")
+    r = requests.get(f"{BASE_URL}/videos")
     if r.status_code == 404:
-        ok("GET /download/videos retorna 404 corretamente", "nenhum vídeo no estado atual")
+        ok("GET /videos retorna 404 corretamente", "nenhum vídeo no estado atual")
     else:
-        aviso("GET /download/videos", f"esperado HTTP 404, recebido HTTP {r.status_code}")
+        aviso("GET /videos", f"esperado HTTP 404, recebido HTTP {r.status_code}")
 
 
 def testar_download_video_por_nome_inexistente():
