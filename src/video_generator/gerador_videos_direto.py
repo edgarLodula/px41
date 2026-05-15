@@ -31,9 +31,20 @@ LIMITE_PALAVRAS     = 80    # palavras máximas no roteiro final
 LIMITE_PALAVRAS_MD  = 1200  # chars do markdown usados como contexto para o Gemini
 # ──────────────────────────────────────────────────────────────────────────────
 
-HEYGEN_BASE_URL     = "https://api.heygen.com"
-HEYGEN_ASPECT_RATIO = "16:9"
-HEYGEN_ENGINE       = "avatar_iv"
+HEYGEN_BASE_URL       = "https://api.heygen.com"
+HEYGEN_ASPECT_RATIO   = "16:9"
+HEYGEN_ENGINE         = "avatar_iv"       # "avatar_iv" (padrão) | "avatar_v" (melhor qualidade)
+HEYGEN_SPEED          = 1.0               # 0.5–2.0 — testar 0.9 se parecer acelerado
+HEYGEN_EXPRESSIVENESS = "medium"          # "low" | "medium" | "high"
+HEYGEN_MOTION_PROMPT  = "calm, professional, occasional hand gestures while teaching"
+# Background: prioridade → asset_id (HeyGen) > URL pública > cor sólida
+# Rodar scripts/upload_background_heygen.py uma vez para gerar HEYGEN_BG_ASSET_ID
+# FEATURE FUTURA: permitir o usuário fazer upload do próprio background na UI
+#   → frontend envia imagem para POST /gerador-videos/background
+#   → backend faz upload para POST /v3/assets do HeyGen
+#   → salva asset_id no job e usa no payload do vídeo
+HEYGEN_BG_ASSET_ID    = os.getenv("HEYGEN_BG_ASSET_ID", "")
+HEYGEN_BG_COLOR       = "#1a2744"        # fallback: azul escuro neutro
 GEMINI_MODEL        = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Estados possíveis do job
@@ -241,8 +252,17 @@ def gerar_video_heygen(
         "script":       _truncar_palavras(roteiro, LIMITE_PALAVRAS),
         "title":        f"Introdução — {disciplina}",
         "aspect_ratio": HEYGEN_ASPECT_RATIO,
+        "fit":          "contain",
         "engine":       {"type": HEYGEN_ENGINE},
-        "voice_settings": {"speed": 1.0},
+        "voice_settings": {"speed": HEYGEN_SPEED},
+        "expressiveness": HEYGEN_EXPRESSIVENESS,
+        "motion_prompt":  HEYGEN_MOTION_PROMPT,
+        "background": (
+            {"type": "image", "asset_id": HEYGEN_BG_ASSET_ID}
+            if HEYGEN_BG_ASSET_ID
+            else {"type": "color", "value": HEYGEN_BG_COLOR}
+        ),
+        "caption": {"style": "default"},
     }
 
     resp = requests.post(
