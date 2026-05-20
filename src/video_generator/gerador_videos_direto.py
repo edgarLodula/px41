@@ -446,12 +446,15 @@ def verificar_status_video(video_id: str, heygen_token: str) -> dict:
         raise RuntimeError(f"GET /v3/videos/{video_id}: HTTP {resp.status_code}")
 
     data = resp.json().get("data", {})
+    # HeyGen v3 usa failure_message/failure_code para erros, não "error"
+    erro = data.get("failure_message") or data.get("error") or data.get("failure_code")
     return {
         "status":        data.get("status", "unknown"),
         "video_url":     data.get("video_url"),
         "thumbnail_url": data.get("thumbnail_url"),
         "duration":      data.get("duration"),
-        "error":         data.get("error"),
+        "error":         erro,
+        "failure_code":  data.get("failure_code"),
     }
 
 

@@ -1,9 +1,8 @@
 import os
 import markdown
 import base64
-import pdfkit
-
-WKHTMLTOPDF_PATH = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+from io import BytesIO
+from xhtml2pdf import pisa
 
 
 
@@ -121,7 +120,7 @@ def gerar_apostilas_por_curso(
         if not os.path.isdir(caminho_curso):
             continue
 
-        print(f"\n📚 Gerando apostila do curso: {curso}")
+        print(f"\nGerando apostila do curso: {curso}")
 
         conteudos_html = ""
 
@@ -151,8 +150,10 @@ def gerar_apostilas_por_curso(
         nome_pdf = curso.replace(" ", "_") + ".pdf"
         caminho_pdf = os.path.join(pasta_pdf, nome_pdf)
 
-        # ✅ AQUI ESTÁ A CORREÇÃO
-        config = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
-        pdfkit.from_string(html_final, caminho_pdf, configuration=config)
+        # Gera PDF com xhtml2pdf (pure Python, sem dependências externas)
+        with open(caminho_pdf, "wb") as f:
+            resultado = pisa.CreatePDF(html_final.encode("utf-8"), dest=f, encoding="utf-8")
+        if resultado.err:
+            raise Exception(f"xhtml2pdf erro ao gerar PDF: {resultado.err}")
 
-        print(f"   ✅ PDF gerado: {caminho_pdf}")
+        print(f"   PDF gerado: {caminho_pdf}")

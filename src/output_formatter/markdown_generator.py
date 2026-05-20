@@ -49,9 +49,14 @@ def gerar_markdowns(
     model,
     index,
     gemini,
-    pasta_saida="data/output/markdown"
+    pasta_saida="data/output/markdown",
+    on_disciplina=None,   # callback(nome, concluidas, total) — progresso por disciplina
+    base_rag=None,        # base completa para RAG (se None usa base_geral)
 ):
     os.makedirs(pasta_saida, exist_ok=True)
+
+    # base para RAG — usa a completa quando disponível, evita index out of range
+    _base_rag = base_rag if base_rag is not None else base_geral
 
     # -------------------------
     # AGRUPA: curso → disciplina → lista de aulas
@@ -85,6 +90,8 @@ def gerar_markdowns(
         for disciplina, aulas in disciplinas.items():
             contador += 1
             print(f"[{contador}/{total_disciplinas}] Gerando: {disciplina} ({len(aulas)} aulas)...")
+            if on_disciplina:
+                on_disciplina(disciplina, contador - 1, total_disciplinas)
 
             try:
                 # -------------------------
@@ -107,7 +114,7 @@ def gerar_markdowns(
                 # RAG — contexto de outras disciplinas
                 # -------------------------
                 query = f"{disciplina} {ementa_consolidada} {conteudo_consolidado[:500]}"
-                chunks = buscar_chunks(query, model, index, base_geral)
+                chunks = buscar_chunks(query, model, index, _base_rag)
                 contexto = "\n\n".join([
                     f"{c['disciplina']}\n{c['conteudo']}"
                     for c in chunks
