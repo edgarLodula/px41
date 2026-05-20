@@ -25,6 +25,14 @@ def limpar_texto(texto):
     return "\n".join([linha.strip() for linha in texto.strip().splitlines() if linha.strip()])
 
 
+def _sanitizar_nome_arquivo(nome: str) -> str:
+    """Remove caracteres inválidos para nomes de arquivo no Windows."""
+    nome = " ".join(nome.split())  # colapsa whitespace/newlines em espaço único
+    nome = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', nome)  # caracteres proibidos no Windows
+    nome = re.sub(r'[^\w\s-]', '', nome)
+    return nome.strip().replace(" ", "_")
+
+
 def _controle_editorial_topico(i: int, nome: str) -> str:
     return (
         f"\n\n---\n\n"
@@ -87,7 +95,7 @@ def gerar_markdowns(
         arquivo = item.get("arquivo", "").strip()
         if not arquivo:
             arquivo = "curso_desconhecido"
-        disciplina = item.get("disciplina", "").strip()
+        disciplina = " ".join(item.get("disciplina", "").split()).strip()
         if not disciplina:
             continue
         cursos.setdefault(arquivo, {}).setdefault(disciplina, []).append(item)
@@ -179,8 +187,7 @@ def gerar_markdowns(
                 # SALVA .md
                 # -------------------------
                 
-                nome_arquivo = re.sub(r'[^\w\s-]', '', disciplina) \
-                    .strip().replace(" ", "_")
+                nome_arquivo = _sanitizar_nome_arquivo(disciplina)
 
                 caminho_doc = os.path.join(pasta_curso, f"{nome_arquivo}.md")
 

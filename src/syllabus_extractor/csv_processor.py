@@ -157,9 +157,9 @@ def extrair_base_csv(
     with open(caminho_csv, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row_idx, linha in enumerate(reader):
-            curso        = linha.get("Curso", "").strip()
-            disciplina   = linha.get("Disciplina", "").strip()
-            ementa       = linha.get("Ementa", "").strip()
+            curso        = " ".join(linha.get("Curso", "").split()).strip()
+            disciplina   = " ".join(linha.get("Disciplina", "").split()).strip()
+            ementa       = " ".join(linha.get("Ementa", "").split()).strip()
             conteudo_raw = linha.get("Conteudo_Programatico", "").strip()
 
             if not disciplina:

@@ -45,6 +45,7 @@ def main():
     # ------------------------------------------------------------------
     # 1. DESCOBRE TODOS OS PDFs em data/input/
     # ------------------------------------------------------------------
+    
     pdfs = sorted([
         f for f in os.listdir(PASTA_PDFS)
         if f.lower().endswith(".pdf")
@@ -145,7 +146,7 @@ def main():
         gemini=gemini,
         pasta_saida=PASTA_MARKDOWN,
     )
-
+    
     # ------------------------------------------------------------------
     # 8. PDF — uma apostila por curso
     # ------------------------------------------------------------------
@@ -155,7 +156,7 @@ def main():
         pasta_pdf=PASTA_PDF,
         logo_path=LOGO_PATH,
     )
-
+    """
     # ------------------------------------------------------------------
     # 9. VÍDEOS — um vídeo por disciplina (requer HEYGEN_API_KEY)
     # ------------------------------------------------------------------
@@ -185,7 +186,7 @@ def main():
     if heyGen_token:
         print(f"   • Vídeos     → {PASTA_VIDEO}")
     print(f"{'='*60}\n")
-
+    """
 
 # =========================
 # ENTRYPOINT
