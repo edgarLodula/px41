@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import threading
 import tempfile
@@ -22,10 +23,11 @@ from src.video_generator.gerador_videos_direto import (
     novo_job,
     extrair_markdown_do_pdf,
     gerar_roteiro,
-    gerar_plano_cenas,
+    parsear_cenas_do_roteiro,
     gerar_video_heygen,
     aguardar_video,
     verificar_status_video,
+    extrair_falas_do_roteiro,
     LIMITE_DISCIPLINAS,
     LIMITE_PALAVRAS,
 )
@@ -306,19 +308,66 @@ def download_video():
 
 _jobs: dict[str, dict] = {}
 
+PASTA_JOBS = "data/output/jobs"
+
+
+def _pasta_job(job_id: str) -> str:
+    pasta = os.path.join(PASTA_JOBS, job_id)
+    os.makedirs(pasta, exist_ok=True)
+    return pasta
+
+
+def salvar_job(job_id: str):
+    """
+    Persiste em disco o estado atual do job e seus artefatos.
+
+    Estrutura gerada:
+      data/output/jobs/{job_id}/
+        job.json       ← estado completo (permite retomar)
+        markdown.md    ← gerado após etapa 1
+        roteiro.md     ← gerado após etapa 3
+        cenas.json     ← gerado após etapa 5
+        videos/        ← preenchida após etapa 7
+    """
+    job   = _jobs.get(job_id)
+    if not job:
+        return
+
+    pasta = _pasta_job(job_id)
+
+    # Estado completo
+    with open(os.path.join(pasta, "job.json"), "w", encoding="utf-8") as f:
+        json.dump(job, f, ensure_ascii=False, indent=2, default=str)
+
+    # Artefatos textuais
+    if job.get("markdown"):
+        with open(os.path.join(pasta, "markdown.md"), "w", encoding="utf-8") as f:
+            f.write(job["markdown"])
+
+    if job.get("script"):
+        with open(os.path.join(pasta, "roteiro.md"), "w", encoding="utf-8") as f:
+            f.write(job["script"])
+
+    if job.get("scenes"):
+        with open(os.path.join(pasta, "cenas.json"), "w", encoding="utf-8") as f:
+            json.dump(job["scenes"], f, ensure_ascii=False, indent=2)
+
 
 def _extrair_em_background(job_id: str, caminho_pdf: str):
-    """Etapa 1: extrai o markdown do PDF em background."""
+    """Etapa 1: extrai o texto do PDF e usa Gemini para estruturar em Markdown."""
     try:
-        resultado = extrair_markdown_do_pdf(caminho_pdf)
+        gemini_token = os.getenv("GEMINI_API_KEY")
+        resultado = extrair_markdown_do_pdf(caminho_pdf, gemini_token)
         _jobs[job_id].update({
             "state":      "awaiting_md_approval",
             "disciplina": resultado["disciplina"],
             "ementa":     resultado["ementa"],
             "markdown":   resultado["markdown"],
         })
+        salvar_job(job_id)
     except Exception as e:
         _jobs[job_id].update({"state": "error", "erro": str(e)})
+        salvar_job(job_id)
     finally:
         try:
             os.remove(caminho_pdf)
@@ -333,36 +382,92 @@ def _gerar_roteiro_em_background(job_id: str):
     try:
         script = gerar_roteiro(job["markdown"], job["disciplina"], gemini_token)
         _jobs[job_id].update({"state": "awaiting_script_approval", "script": script})
+        salvar_job(job_id)
     except Exception as e:
         _jobs[job_id].update({"state": "error", "erro": str(e)})
+        salvar_job(job_id)
 
 
 def _gerar_cenas_em_background(job_id: str):
-    """Etapa 5: gera o plano de cenas a partir do roteiro aprovado."""
-    job          = _jobs[job_id]
-    gemini_token = os.getenv("GEMINI_API_KEY")
+    """
+    Etapa 5: parseia o roteiro aprovado e extrai a estrutura de cenas.
+    Sem chamada ao Gemini — instantâneo, zero tokens extras.
+    """
+    job = _jobs[job_id]
     try:
-        scenes = gerar_plano_cenas(job["script"], job["disciplina"], gemini_token)
-        _jobs[job_id].update({"state": "awaiting_scenes_approval", "scenes": scenes})
+        cenas = parsear_cenas_do_roteiro(job["script"])
+        if not cenas:
+            raise ValueError(
+                "Nenhuma cena encontrada no roteiro. "
+                "Certifique-se de que o roteiro usa o formato [CENA N — nome] e [FALA] texto."
+            )
+        _jobs[job_id].update({"state": "awaiting_scenes_approval", "scenes": cenas})
+        salvar_job(job_id)
     except Exception as e:
         _jobs[job_id].update({"state": "error", "erro": str(e)})
+        salvar_job(job_id)
 
 
 def _gerar_video_em_background(job_id: str):
-    """Etapa 7: gera o vídeo no HeyGen a partir do roteiro + cenas aprovados."""
+    """
+    Etapa 7: extrai as falas das disciplinas SELECIONADAS e gera um vídeo
+    por disciplina no HeyGen. Salva os vídeos na pasta do job.
+    """
     job          = _jobs[job_id]
     heygen_token = os.getenv("HEYGEN_API_KEY")
+    pasta        = _pasta_job(job_id)
+    pasta_videos = os.path.join(pasta, "videos")
+    os.makedirs(pasta_videos, exist_ok=True)
+
     try:
-        video_id = gerar_video_heygen(job["script"], job["disciplina"], heygen_token)
-        _jobs[job_id]["video_id"] = video_id
-        info = aguardar_video(video_id, heygen_token)
+        # Filtra apenas disciplinas selecionadas
+        cenas = job.get("scenes", [])
+        if isinstance(cenas, list):
+            cenas_selecionadas = [d for d in cenas if d.get("selecionada", True)]
+        else:
+            cenas_selecionadas = cenas
+
+        falas_por_disciplina = extrair_falas_do_roteiro(cenas_selecionadas)
+
+        if not falas_por_disciplina:
+            raise ValueError(
+                "Nenhuma fala encontrada nas disciplinas selecionadas. "
+                "Verifique se as disciplinas estão marcadas e se as falas estão preenchidas."
+            )
+
+        videos = []
+        for disciplina, fala in falas_por_disciplina.items():
+            video_id = gerar_video_heygen(fala, disciplina, heygen_token)
+            info     = aguardar_video(video_id, heygen_token)
+
+            # Salva o vídeo em disco
+            slug          = re.sub(r"[^\w]", "_", disciplina)[:60]
+            caminho_video = os.path.join(pasta_videos, f"{slug}.mp4")
+            if info.get("video_url"):
+                import requests as req
+                video_bytes = req.get(info["video_url"], timeout=60).content
+                with open(caminho_video, "wb") as f:
+                    f.write(video_bytes)
+
+            videos.append({
+                "disciplina":    disciplina,
+                "video_id":      video_id,
+                "video_url":     info.get("video_url"),
+                "duration":      info.get("duration"),
+                "caminho_local": caminho_video,
+            })
+
         _jobs[job_id].update({
-            "state":     "completed",
-            "video_url": info["video_url"],
-            "duration":  info["duration"],
+            "state":   "completed",
+            "videos":  videos,
+            "video_url": videos[0]["video_url"] if videos else None,
+            "duration":  videos[0]["duration"]  if videos else None,
         })
+        salvar_job(job_id)
+
     except Exception as e:
         _jobs[job_id].update({"state": "error", "erro": str(e)})
+        salvar_job(job_id)
 
 
 # ─── Iniciar job ──────────────────────────────────────────────────────────────
@@ -449,9 +554,9 @@ async def aprovar_roteiro(job_id: str, body: dict = {}):
 @app.post("/gerador-videos/aprovar-cenas/{job_id}")
 async def aprovar_cenas(job_id: str, body: dict = {}):
     """
-    Etapa 6 → 7: usuário aprova (ou edita) o plano de cenas.
-    Body opcional: { "scenes": "plano editado" }
-    Após aprovação, envia para o HeyGen.
+    Etapa 6 → 7: usuário aprova (ou edita) as falas por cena.
+    Body opcional: { "scenes": [...] }  — lista de disciplinas com cenas editadas
+    Após aprovação, envia para o HeyGen (uma chamada por disciplina).
     """
     job = _jobs.get(job_id)
     if not job:

@@ -8,11 +8,6 @@ Fluxo:
       → [geração vídeo]   → ✅ Vídeo pronto
 
 Em cada etapa de aprovação, o usuário pode editar o conteúdo gerado antes de avançar.
-
-LIMITES (remova ou ajuste conforme necessário):
-  LIMITE_DISCIPLINAS  = 1   → processa apenas 1 disciplina por PDF
-  LIMITE_PALAVRAS_MD  = 800 → caracteres do markdown enviados ao Gemini para roteiro
-  LIMITE_PALAVRAS     = 80  → palavras no roteiro final (~37 segundos de vídeo)
 """
 
 import os
@@ -25,10 +20,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ─── LIMITES REMOVÍVEIS ────────────────────────────────────────────────────────
-LIMITE_DISCIPLINAS  = 1     # disciplinas processadas por PDF
-LIMITE_PALAVRAS     = 80    # palavras máximas no roteiro final
-LIMITE_PALAVRAS_MD  = 1200  # chars do markdown usados como contexto para o Gemini
+# ─── CONFIGURAÇÕES DE PROCESSAMENTO ───────────────────────────────────────────
+LIMITE_DISCIPLINAS  = None  # None = processa todas as disciplinas do PDF
+LIMITE_PALAVRAS     = None  # None = sem limite de palavras no roteiro
+LIMITE_PALAVRAS_MD  = None  # None = usa o markdown completo como contexto
 # ──────────────────────────────────────────────────────────────────────────────
 
 HEYGEN_BASE_URL       = "https://api.heygen.com"
@@ -88,96 +83,190 @@ def novo_job() -> dict:
 
 
 # =============================================================================
-# ETAPA 1 — EXTRAÇÃO DO PDF → MARKDOWN
+# ETAPA 1 — EXTRAÇÃO DO PDF → MARKDOWN (via Gemini)
 # =============================================================================
 
-def extrair_markdown_do_pdf(caminho_pdf: str) -> dict:
+def extrair_markdown_do_pdf(caminho_pdf: str, gemini_token: str = None) -> dict:
     """
-    Extrai a primeira disciplina do PDF e converte para Markdown estruturado.
+    Extrai o texto bruto do PDF e usa o Gemini para estruturar
+    o conteúdo em Markdown por disciplina.
+
     Retorna dict com 'disciplina', 'ementa', 'markdown'.
     """
-    registros = _extrair_tabelas(caminho_pdf) or _extrair_por_texto(caminho_pdf)
+    texto_bruto = _extrair_texto_pdf(caminho_pdf)
 
-    if not registros:
-        raise ValueError("Nenhuma disciplina encontrada no PDF.")
+    if not texto_bruto.strip():
+        raise ValueError("Nenhum texto extraído do PDF. O arquivo pode ser uma imagem escaneada.")
 
-    item = registros[0]
-    disciplina = item["disciplina"]
-    ementa     = item["ementa"]
-    conteudo   = item["conteudo"]
+    token = gemini_token or os.getenv("GEMINI_API_KEY")
+    if not token:
+        raise ValueError("GEMINI_API_KEY não configurada.")
 
-    markdown = f"# {disciplina}\n\n"
-    if ementa:
-        markdown += f"## Ementa\n\n{ementa}\n\n"
-    if conteudo:
-        markdown += f"## Conteúdo Programático\n\n{conteudo}\n\n"
+    markdown = _gemini_estruturar_pdf(texto_bruto, token)
 
-    return {"disciplina": disciplina, "ementa": ementa, "markdown": markdown.strip()}
+    # Extrai o nome da primeira disciplina do markdown para metadados
+    disciplina = _extrair_nome_disciplina(markdown)
+
+    return {
+        "disciplina": disciplina,
+        "ementa":     "",   # ementa está dentro do markdown
+        "markdown":   markdown,
+    }
 
 
-def _extrair_tabelas(caminho_pdf: str) -> list[dict]:
-    registros = []
+def _extrair_texto_pdf(caminho_pdf: str) -> str:
+    """Extrai todo o texto do PDF usando pdfplumber."""
     with pdfplumber.open(caminho_pdf) as pdf:
-        for pagina in pdf.pages:
-            for tabela in (pagina.extract_tables() or []):
-                for linha in tabela:
-                    if not linha or not linha[0]:
-                        continue
-                    celula0 = str(linha[0]).strip()
-                    if celula0.lower() in ("", "disciplina", "módulo", "matéria"):
-                        continue
-                    registros.append({
-                        "disciplina": celula0,
-                        "ementa":     str(linha[1]).strip() if len(linha) > 1 and linha[1] else "",
-                        "conteudo":   str(linha[2]).strip() if len(linha) > 2 and linha[2] else "",
-                    })
-                    if len(registros) >= LIMITE_DISCIPLINAS:
-                        return registros
-    return registros
+        paginas = [p.extract_text() or "" for p in pdf.pages]
+    return "\n\n".join(paginas)
 
 
-def _extrair_por_texto(caminho_pdf: str) -> list[dict]:
-    registros = []
-    with pdfplumber.open(caminho_pdf) as pdf:
-        texto = "\n".join(p.extract_text() or "" for p in pdf.pages)
-    for linha in texto.splitlines():
+def _gemini_estruturar_pdf(texto_bruto: str, token: str) -> str:
+    """
+    Envia o texto bruto do PDF para o Gemini e pede para estruturar
+    em Markdown limpo com todas as disciplinas.
+    """
+    # Limita o texto enviado para evitar exceder o contexto do Gemini
+    contexto = texto_bruto[:12000]
+
+    prompt = f"""Você é um especialista em organização de currículos educacionais.
+
+O texto abaixo foi extraído de um PDF de currículo escolar.
+Sua tarefa é transformar esse texto em Markdown bem estruturado, organizando as disciplinas.
+
+REGRAS:
+- Use `# Nome da Disciplina` para cada disciplina
+- Use `## Ementa` para a ementa de cada disciplina
+- Use `## Conteúdo Programático` para os conteúdos, com itens em lista (`- item`)
+- Mantenha o conteúdo original fielmente — não invente informações
+- Se houver várias disciplinas, inclua todas
+- Ignore cabeçalhos institucionais (nome da escola, endereço, portaria, etc.)
+- Retorne APENAS o Markdown, sem explicações adicionais
+
+TEXTO DO PDF:
+{contexto}
+
+Markdown estruturado:"""
+
+    return _chamar_gemini(prompt, token, max_tokens=4000)
+
+
+def _extrair_nome_disciplina(markdown: str) -> str:
+    """Extrai o nome da primeira disciplina do markdown gerado."""
+    for linha in markdown.splitlines():
         linha = linha.strip()
-        if len(linha) > 10 and not linha[0].isdigit():
-            registros.append({"disciplina": linha, "ementa": "", "conteudo": ""})
-            if len(registros) >= LIMITE_DISCIPLINAS:
-                break
-    return registros
+        if linha.startswith("# "):
+            return linha[2:].strip()
+    return "Disciplina"
+
 
 
 # =============================================================================
-# ETAPA 2 — MARKDOWN APROVADO → ROTEIRO
+# ETAPA 2 — MARKDOWN APROVADO → ROTEIROS DE PRODUÇÃO (um por disciplina)
 # =============================================================================
 
 def gerar_roteiro(markdown: str, disciplina: str, gemini_token: str) -> str:
     """
-    Recebe o Markdown aprovado e gera um roteiro de vídeo-aula inaugural.
-    Truncado a LIMITE_PALAVRAS palavras.
+    Recebe o Markdown completo aprovado e gera um roteiro de produção
+    para CADA disciplina encontrada.
+
+    O roteiro contém:
+    - [FALA] — texto exato que o avatar vai falar
+    - [PRODUCAO] — direção de expressão/postura do avatar
+    - [ANGULO] — sugestão de enquadramento/ângulo de câmera
+    - [TEXTO NA TELA] — texto sobreposto ao vídeo (caption/lower third)
+
+    Retorna um documento único com todos os roteiros separados por disciplina.
     """
-    contexto = markdown[:LIMITE_PALAVRAS_MD]
+    contexto = markdown if not LIMITE_PALAVRAS_MD else markdown[:LIMITE_PALAVRAS_MD]
 
-    prompt = f"""Você é um roteirista especialista em vídeo-aulas técnicas de saúde.
+    prompt = f"""Você é um diretor criativo especialista em vídeo-aulas técnicas para cursos de saúde e administração.
 
-Com base no conteúdo abaixo da disciplina "{disciplina}", escreva APENAS o texto que o avatar deve falar em um vídeo de abertura.
+Você recebeu o currículo completo abaixo. Sua tarefa é criar um ROTEIRO DE PRODUÇÃO para cada disciplina encontrada.
 
-REGRAS OBRIGATÓRIAS:
-- Escreva SOMENTE a fala do avatar, sem títulos, marcações, colchetes ou símbolos
-- Máximo de {LIMITE_PALAVRAS} palavras
-- Tom: acolhedor, confiante, direto
-- Mencione a Escola Técnica San Marino
-- Apresente a disciplina e faça uma promessa de valor ao aluno
-- Termine com uma frase de boas-vindas motivadora
+FORMATO OBRIGATÓRIO para cada disciplina:
+---
+DISCIPLINA: [nome completo da disciplina]
+---
 
-CONTEÚDO DA DISCIPLINA:
+[CENA 1 — ABERTURA]
+[PRODUCAO] Direção de expressão e postura do avatar (ex: "Sorrindo, olhar confiante para a câmera, tom acolhedor")
+[ANGULO] Sugestão de enquadramento (ex: "Plano médio, avatar centralizado")
+[TEXTO NA TELA] Texto curto para exibir na tela (máx. 6 palavras)
+[FALA] Texto exato que o avatar vai falar nesta cena
+
+[CENA 2 — DESENVOLVIMENTO]
+[PRODUCAO] ...
+[ANGULO] ...
+[TEXTO NA TELA] ...
+[FALA] ...
+
+[CENA 3 — ENCERRAMENTO]
+[PRODUCAO] ...
+[ANGULO] ...
+[TEXTO NA TELA] ...
+[FALA] ...
+
+---
+DISCIPLINA: [próxima disciplina]
+---
+... (repete o formato)
+
+REGRAS:
+- Crie entre 3 e 5 cenas por disciplina
+- [FALA] deve ser fluido, natural, sem marcações — é o texto exato para TTS
+- [PRODUCAO] guia o avatar (expressividade, gestos, emoção)
+- [ANGULO] é sugestão para edição posterior (não afeta o HeyGen diretamente)
+- [TEXTO NA TELA] são palavras-chave impactantes para sobrepor no vídeo
+- Tom geral: acolhedor, empolgante, profissional
+- Mencione a Escola Técnica San Marino na abertura da primeira disciplina
+- Cada disciplina deve ter sua identidade própria no roteiro
+
+CURRÍCULO:
 {contexto}
 
-Escreva apenas o texto da fala:"""
+Gere os roteiros de produção:"""
 
-    return _chamar_gemini(prompt, gemini_token, max_tokens=400)
+    return _chamar_gemini(prompt, gemini_token, max_tokens=6000)
+
+
+def extrair_falas_do_roteiro(roteiro_ou_cenas) -> dict[str, str]:
+    """
+    Extrai o texto de fala por disciplina.
+    Aceita tanto o roteiro em texto (str) quanto a estrutura de cenas (list).
+    Retorna dict { nome_disciplina: texto_fala_concatenado }
+    """
+    # Se recebeu a estrutura de cenas (lista de dicts)
+    if isinstance(roteiro_ou_cenas, list):
+        resultado = {}
+        for disc in roteiro_ou_cenas:
+            nome = disc.get("disciplina", "Disciplina")
+            falas = [c["fala"] for c in disc.get("cenas", []) if c.get("fala")]
+            if falas:
+                resultado[nome] = " ".join(falas)
+        return resultado
+
+    # Fallback: parseia o texto do roteiro
+    disciplinas: dict[str, str] = {}
+    disciplina_atual = None
+    falas: list[str] = []
+
+    for linha in roteiro_ou_cenas.splitlines():
+        ls = linha.strip()
+        if ls.startswith("DISCIPLINA:"):
+            if disciplina_atual and falas:
+                disciplinas[disciplina_atual] = " ".join(falas).strip()
+            disciplina_atual = ls.replace("DISCIPLINA:", "").strip().strip("-").strip()
+            falas = []
+        elif ls.startswith("[FALA]"):
+            texto = ls.replace("[FALA]", "").strip()
+            if texto:
+                falas.append(texto)
+
+    if disciplina_atual and falas:
+        disciplinas[disciplina_atual] = " ".join(falas).strip()
+
+    return disciplinas
 
 
 def _truncar_palavras(texto: str, n: int) -> str:
@@ -189,32 +278,93 @@ def _truncar_palavras(texto: str, n: int) -> str:
 # ETAPA 3 — ROTEIRO APROVADO → PLANO DE CENAS
 # =============================================================================
 
-def gerar_plano_cenas(roteiro: str, disciplina: str, gemini_token: str) -> str:
+def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
     """
-    Recebe o roteiro aprovado e gera um plano visual de cenas detalhado.
-    O usuário pode editar antes de avançar para o HeyGen.
+    Parseia o roteiro aprovado e extrai a estrutura de cenas por disciplina.
+    Sem chamada ao Gemini — usa o que o usuário já aprovou.
+
+    Retorna lista de dicts:
+    [
+      {
+        "disciplina": "Introdução à Administração",
+        "cenas": [
+          {
+            "numero": 1,
+            "nome": "Abertura",
+            "producao": "Sorrindo, olhar confiante",
+            "angulo": "Plano médio",
+            "texto_na_tela": "Escola San Marino",
+            "fala": "Olá! Seja bem-vindo..."
+          },
+          ...
+        ]
+      },
+      ...
+    ]
     """
-    prompt = f"""Você é um diretor criativo de vídeo-aulas.
+    disciplinas = []
+    disciplina_atual = None
+    cenas_atuais: list[dict] = []
+    cena_atual: dict | None = None
 
-Com base no roteiro abaixo para a disciplina "{disciplina}", crie um PLANO DE CENAS detalhado.
+    def _salvar_cena():
+        if cena_atual and cena_atual.get("fala"):
+            cenas_atuais.append(dict(cena_atual))
 
-ROTEIRO:
-{roteiro}
+    def _salvar_disciplina():
+        nonlocal cena_atual
+        _salvar_cena()
+        if disciplina_atual and cenas_atuais:
+            disciplinas.append({
+                "disciplina": disciplina_atual,
+                "cenas":      list(cenas_atuais),
+            })
 
-FORMATO DO PLANO DE CENAS (siga exatamente):
----
-CENA 1 — [Nome da cena] ([tempo aproximado, ex: 0:00 - 0:08])
-[AVATAR] Emoção/postura do avatar (ex: Sorrindo, olhar confiante, mãos abertas)
-[FALA] Trecho exato do roteiro para esta cena
-[TEXTO NA TELA] Palavras-chave ou frase de impacto (máx. 6 palavras)
-[VISUAL/FUNDO] Descrição do cenário ou fundo sugerido
+    for linha in roteiro.splitlines():
+        ls = linha.strip()
+        if not ls:
+            continue
 
-CENA 2 — ...
----
+        # Nova disciplina
+        if ls.startswith("DISCIPLINA:") or (ls.startswith("---") and "DISCIPLINA:" in roteiro[roteiro.find(ls):roteiro.find(ls)+50]):
+            nome = ls.replace("DISCIPLINA:", "").strip().strip("-").strip()
+            if nome:
+                _salvar_disciplina()
+                disciplina_atual = nome
+                cenas_atuais.clear()
+                cena_atual = None
 
-Crie entre 3 e 5 cenas cobrindo todo o roteiro. Seja específico e visual."""
+        # Nova cena — detecta padrões como [CENA 1 — Abertura] ou CENA 1 —
+        elif ls.upper().startswith("[CENA ") or (ls.upper().startswith("CENA ") and "—" in ls):
+            _salvar_cena()
+            nome_cena = ls.strip("[]").split("—", 1)[-1].strip() if "—" in ls else ls
+            # remove timecode se presente ex: "(0:00 - 0:10)"
+            nome_cena = re.sub(r'\([\d:]+\s*-\s*[\d:]+\)', '', nome_cena).strip()
+            numero = len(cenas_atuais) + 1
+            cena_atual = {
+                "numero":       numero,
+                "nome":         nome_cena,
+                "producao":     "",
+                "angulo":       "",
+                "texto_na_tela": "",
+                "fala":         "",
+            }
 
-    return _chamar_gemini(prompt, gemini_token, max_tokens=800)
+        elif cena_atual is not None:
+            if ls.startswith("[PRODUCAO]") or ls.startswith("[PRODUCÃO]"):
+                cena_atual["producao"] = ls.split("]", 1)[-1].strip()
+            elif ls.startswith("[ANGULO]") or ls.startswith("[ÂNGULO]"):
+                cena_atual["angulo"] = ls.split("]", 1)[-1].strip()
+            elif ls.startswith("[TEXTO NA TELA]"):
+                cena_atual["texto_na_tela"] = ls.split("]", 1)[-1].strip()
+            elif ls.startswith("[FALA]"):
+                cena_atual["fala"] = ls.replace("[FALA]", "").strip()
+            elif cena_atual.get("fala") and not ls.startswith("["):
+                # continuação da fala em múltiplas linhas
+                cena_atual["fala"] += " " + ls
+
+    _salvar_disciplina()
+    return disciplinas
 
 
 # =============================================================================
@@ -249,7 +399,7 @@ def gerar_video_heygen(
         "type":         "avatar",
         "avatar_id":    avatar_id,
         "voice_id":     voice_id,
-        "script":       _truncar_palavras(roteiro, LIMITE_PALAVRAS),
+        "script":       roteiro if not LIMITE_PALAVRAS else _truncar_palavras(roteiro, LIMITE_PALAVRAS),
         "title":        f"Introdução — {disciplina}",
         "aspect_ratio": HEYGEN_ASPECT_RATIO,
         "fit":          "contain",
