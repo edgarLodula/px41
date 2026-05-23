@@ -41,7 +41,7 @@ CAMINHO_INDEX  = os.path.join(PASTA_INDEX, "faiss_index.bin")
 def main():
     heyGen_token = os.getenv("HEYGEN_API_KEY")
     openai_token = os.getenv("OPENAI_API_KEY")
-
+    """
     # ------------------------------------------------------------------
     # 1. DESCOBRE TODOS OS PDFs em data/input/
     # ------------------------------------------------------------------
@@ -186,7 +186,6 @@ def main():
     if heyGen_token:
         print(f"   • Vídeos     → {PASTA_VIDEO}")
     print(f"{'='*60}\n")
-    """
 
 # =========================
 # ENTRYPOINT

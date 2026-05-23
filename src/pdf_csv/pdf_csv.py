@@ -7,13 +7,17 @@ def extrair_pdf_para_csv(caminho_pdf: str, caminho_csv: str):
 
     registros = []
     with pdfplumber.open(caminho_pdf) as pdf:
-        nome_curso = pdf.pages[0].extract_text().split("\n")[0].strip()
+        texto_primeira_pagina = pdf.pages[0].extract_text() or ""
+        nome_curso = (texto_primeira_pagina.split("\n")[0].strip()
+                      if texto_primeira_pagina else os.path.basename(caminho_pdf))
         for pagina in pdf.pages:
             for tabela in (pagina.extract_tables() or []):
                 for linha in tabela:
+                    if len(linha) < 3:
+                        continue
                     if not linha[0] or not linha[2]:
                         continue
-                    if linha[0].strip() == "Disciplina":
+                    if linha[0].strip().lower() == "disciplina":
                         continue
                     registros.append({
                         "Curso":                 nome_curso,

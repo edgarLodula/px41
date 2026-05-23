@@ -4,7 +4,24 @@ import markdown
 import base64
 import pdfkit
 
-config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
+_WKHTMLTOPDF_PATHS = [
+    r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe",
+    r"C:\Program Files (x86)\wkhtmltopdf\bin\wkhtmltopdf.exe",
+    "/usr/local/bin/wkhtmltopdf",
+    "/usr/bin/wkhtmltopdf",
+]
+
+def _get_pdfkit_config():
+    for path in _WKHTMLTOPDF_PATHS:
+        if os.path.exists(path):
+            return pdfkit.configuration(wkhtmltopdf=path)
+    try:
+        return pdfkit.configuration()
+    except OSError:
+        raise OSError(
+            "wkhtmltopdf não encontrado. Instale em https://wkhtmltopdf.org/downloads.html "
+            f"ou defina o caminho em _WKHTMLTOPDF_PATHS. Caminhos tentados: {_WKHTMLTOPDF_PATHS}"
+        )
 
 WKHTMLTOPDF_OPTIONS = {
     "encoding": "UTF-8",
@@ -488,8 +505,13 @@ def gerar_apostilas_por_curso(
 ):
     os.makedirs(pasta_pdf, exist_ok=True)
 
-    with open(logo_path, "rb") as img:
-        logo_base64 = base64.b64encode(img.read()).decode()
+    try:
+        with open(logo_path, "rb") as img:
+            logo_base64 = base64.b64encode(img.read()).decode()
+    except FileNotFoundError:
+        print(f"⚠️  Logo não encontrado em '{logo_path}'. A capa será gerada sem imagem.")
+        # 1x1 pixel PNG transparente como placeholder
+        logo_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
     cursos = os.listdir(pasta_markdown)
 
@@ -538,7 +560,7 @@ def gerar_apostilas_por_curso(
         pdfkit.from_string(
             html_final,
             caminho_pdf,
-            configuration=config,
+            configuration=_get_pdfkit_config(),
             options=WKHTMLTOPDF_OPTIONS
         )
 

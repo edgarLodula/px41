@@ -134,7 +134,6 @@ def gerar_markdowns(
             try:
                 # -------------------------
                 # MONTA EMENTA E CONTEÚDO CONSOLIDADOS
-                # (passa todas as aulas de uma vez pro Gemini)
                 # -------------------------
                 ementa_consolidada = aulas[0].get("ementa", "")
 
@@ -161,7 +160,7 @@ def gerar_markdowns(
                 contexto = contexto[:3000]
 
                 # -------------------------
-                # GEMINI — uma chamada por disciplina
+                # LLM — uma chamada por disciplina
                 # -------------------------
                 topicos_dict = {}
                 for aula in aulas:
@@ -175,9 +174,13 @@ def gerar_markdowns(
                     time.sleep(10)
 
                 intro     = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas a introdução.", contexto)
+                time.sleep(10)
                 objetivos = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas os objetivos.", contexto)
+                time.sleep(10)
                 exemplos  = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas exemplos práticos.", contexto)
+                time.sleep(10)
                 resumo    = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas o resumo.", contexto)
+                time.sleep(10)
                 questoes  = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere a avaliação geral completa da disciplina com questões objetivas, dissertativas e baseadas em casos práticos.", contexto)
 
                 documento = juntar_topicos_formatado(intro, objetivos, topicos_dict, exemplos, resumo, questoes)
