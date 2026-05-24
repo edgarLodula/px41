@@ -517,6 +517,23 @@ async def upload_pdfs(files: list[UploadFile] = File(...)):
         return JSONResponse(status_code=400, content={"error": "Pipeline já está em execução."})
 
     reset_state()
+
+    # Limpa PDFs anteriores para não misturar cursos de sessões antigas
+    if os.path.exists(PASTA_PDFS):
+        for arquivo_antigo in os.listdir(PASTA_PDFS):
+            if arquivo_antigo.endswith(".pdf"):
+                try:
+                    os.remove(os.path.join(PASTA_PDFS, arquivo_antigo))
+                except Exception:
+                    pass
+
+    # Remove índice FAISS antigo para ser reconstruído com os novos dados
+    if os.path.exists(CAMINHO_INDEX):
+        try:
+            os.remove(CAMINHO_INDEX)
+        except Exception:
+            pass
+
     os.makedirs(PASTA_PDFS, exist_ok=True)
 
     for file in files:
