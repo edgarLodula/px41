@@ -68,8 +68,8 @@
     "chunk_id": 7,
     "disciplina": "Fundamentos da Enfermagem I",
     "ementa": "Princípios básicos da prática de enfermagem e assistência ao paciente.",
-    "conteudo": "Higiene e conforto do paciente; Controle de sinais vitais; Administração de medicamentos; Coleta de material para exames; Prevenção de infecções; Curativos e cuidados com feridas; Assistência ao paciente acamado",
-    "texto_embedding": "Fundamentos da Enfermagem I\nPrincípios básicos da prática de enfermagem e assistência ao paciente.\nHigiene e conforto do paciente; Controle de sinais vitais; Administração de medicamentos; Coleta de material para exames; Prevenção de infecções; Curativos e cuidados com feridas; Assistência ao paciente acamado"
+    "conteudo": "Higiene e conforto do paciente; Controle de sinais vitais; Administração de medicamentos; Coleta de material para exames; Prevenção de infecções; Curativos e cuidados com feridas",
+    "texto_embedding": "Fundamentos da Enfermagem I\nPrincípios básicos da prática de enfermagem e assistência ao paciente.\nHigiene e conforto do paciente; Controle de sinais vitais; Administração de medicamentos; Coleta de material para exames; Prevenção de infecções; Curativos e cuidados com feridas"
   },
   {
     "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
@@ -77,8 +77,8 @@
     "chunk_id": 8,
     "disciplina": "Fundamentos da Enfermagem II",
     "ementa": "Aprofundamento das técnicas de enfermagem e cuidados especializados.",
-    "conteudo": "Técnicas de imobilização; Preparo para exames e cirurgias; Monitoramento clínico",
-    "texto_embedding": "Fundamentos da Enfermagem II\nAprofundamento das técnicas de enfermagem e cuidados especializados.\nTécnicas de imobilização; Preparo para exames e cirurgias; Monitoramento clínico"
+    "conteudo": "Assistência ao paciente acamado; Técnicas de imobilização; Preparo para exames e cirurgias; Monitoramento clínico",
+    "texto_embedding": "Fundamentos da Enfermagem II\nAprofundamento das técnicas de enfermagem e cuidados especializados.\nAssistência ao paciente acamado; Técnicas de imobilização; Preparo para exames e cirurgias; Monitoramento clínico"
   },
   {
     "arquivo": "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem.docx.pdf",
