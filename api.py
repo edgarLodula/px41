@@ -1,54 +1,24 @@
-"""
-api.py — Backend San Marino Booklet Creator
-Porta: 8000
-
-Endpoints:
-  POST /upload                               → recebe PDFs, dispara pipeline em background
-  GET  /status                               → status do pipeline (polling do ProcessingStep)
-  GET  /download/apostila                    → baixa a apostila gerada (PDF)
-  POST /approve                              → aprova conteúdo e dispara geração real de vídeo
-  POST /reject                               → rejeita e reseta o pipeline
-  POST /approve/script                       → aprova roteiros (ScriptApprovalStep)
-  POST /reject/script                        → rejeita roteiros e reseta
-  POST /redo                                 → reexecuta pipeline com sugestões do usuário
-  GET  /videos                               → lista vídeos gerados (por disciplina)
-  GET  /download/video/{nome}                → baixa vídeo por nome de disciplina ou arquivo
-  GET  /cursos                               → lista cursos + apostilas (CourseDashboard)
-  GET  /download/apostila/{nome}             → baixa apostila por nome de arquivo
-
-  (fluxo GeradorVideos com aprovação por etapa)
-  POST /gerador-videos/iniciar               → inicia job: PDF → Markdown via OpenAI
-  GET  /gerador-videos/status/{job_id}       → polling do job
-  POST /gerador-videos/aprovar-markdown/{job_id}
-  POST /gerador-videos/aprovar-roteiro/{job_id}
-  POST /gerador-videos/aprovar-cenas/{job_id}
-  GET  /gerador-videos/heygen-status/{video_id}  → consulta status direto no HeyGen v3
-
-Rodar:
-  uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-"""
-
 import os
 import re
 import json
-import tempfile
 import threading
-import traceback
-from datetime import datetime
-from pathlib import Path
-
-from dotenv import load_dotenv
-load_dotenv()
-
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+import tempfile
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
 
-# Pipeline principal
+# =========================
+# IMPORTS DO PIPELINE
+# =========================
+from src.syllabus_extractor.pdf_processor import processar_pdf, processar_semantico
+from src.content_generation.data_loader import carregar_base
+from src.content_generation.embedding_model import carregar_modelo, gerar_embeddings
+from src.content_generation.faiss_index import criar_ou_carregar_index
+from src.content_generation.rag_pipeline import buscar_chunks
+from src.content_generation.generator import configurar_gemini, gerar_documento
+from src.output_formatter.markdown_generator import gerar_markdowns
+from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
-
-# Gerador de vídeos direto (máquina de estados com aprovação por etapa)
 from src.video_generator.gerador_videos_direto import (
     novo_job,
     extrair_markdown_do_pdf,
@@ -58,493 +28,739 @@ from src.video_generator.gerador_videos_direto import (
     aguardar_video,
     verificar_status_video,
     extrair_falas_do_roteiro,
+    LIMITE_DISCIPLINAS,
+    LIMITE_PALAVRAS,
 )
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
-BASE_DIR      = Path(__file__).parent
-DATA_INPUT    = BASE_DIR / "data" / "input"
-DATA_CSV      = BASE_DIR / "data" / "input" / "planilhas_geradas"
-DATA_JSON     = BASE_DIR / "data" / "output" / "json"
-DATA_FAISS    = BASE_DIR / "data" / "output" / "faiss"
-DATA_MARKDOWN = BASE_DIR / "data" / "output" / "markdown"
-DATA_PDF      = BASE_DIR / "data" / "output" / "workbooks_pdf"
-DATA_VIDEO    = BASE_DIR / "data" / "output" / "videos"
-PASTA_JOBS    = BASE_DIR / "data" / "output" / "jobs"
-LOGO_PATH     = BASE_DIR / "assets" / "logo.jpeg"
+# =========================
+# PATHS
+# =========================
+PASTA_PDFS     = "data/input"
+PASTA_JSON     = "data/output/json"
+PASTA_INDEX    = "data/output/faiss"
+PASTA_MARKDOWN = "data/output/markdown"
+PASTA_PDF      = "data/output/workbooks_pdf"
+PASTA_VIDEO    = "data/output/videos"
+ARQUIVO_ROTEIROS = "data/output/roteiros.json"
+ARQUIVO_CENAS    = "data/output/cenas.json"
+LOGO_PATH      = "assets/logo.jpeg"
+CAMINHO_JSON   = os.path.join(PASTA_JSON, "base_geral.json")
+CAMINHO_INDEX  = os.path.join(PASTA_INDEX, "faiss_index.bin")
 
-for d in [DATA_INPUT, DATA_CSV, DATA_JSON, DATA_FAISS, DATA_MARKDOWN,
-          DATA_PDF, DATA_VIDEO, PASTA_JOBS]:
-    d.mkdir(parents=True, exist_ok=True)
+from dotenv import load_dotenv
+load_dotenv()
 
-# ---------------------------------------------------------------------------
-# App FastAPI
-# ---------------------------------------------------------------------------
-app = FastAPI(title="San Marino Booklet Creator API", version="2.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ---------------------------------------------------------------------------
-# Estado global do pipeline principal
-# ---------------------------------------------------------------------------
-STAGE_NAMES = [
-    "Extração de PDF",
-    "Carregamento Base",
-    "Embeddings",
-    "Índice FAISS",
-    "Setup LLM",
-    "Geração Markdown",
-    "PDF da Apostila",
-    "Geração de Vídeo",
-]
-
-pipeline_state: dict = {
-    "status":         "idle",   # idle | running | awaiting_approval | done | error
-    "stage":          0,
-    "stages":         [{"name": n, "status": "waiting"} for n in STAGE_NAMES],
-    "error":          None,
-    "last_apostila":  None,     # path do PDF mais recente
-    "video_paths":    {},       # { nome_disciplina: caminho_absoluto }
-    "uploaded_files": [],       # nomes dos PDFs enviados
-    "instructions":   "",
+# =========================
+# ESTADO GLOBAL DO PIPELINE
+# =========================
+pipeline_state = {
+    "stage": 0,
+    "status": "idle",
+    # Possíveis status do pipeline principal:
+    # idle | running | awaiting_discipline_selection |
+    # awaiting_approval | generating_scripts |
+    # awaiting_scripts_approval | awaiting_scenes_approval |
+    # generating_video | done | error
+    "stages": [
+        {"name": "Extração de PDFs",     "status": "waiting"},
+        {"name": "Carregamento da base", "status": "waiting"},
+        {"name": "Embeddings",           "status": "waiting"},
+        {"name": "Índice FAISS",         "status": "waiting"},
+        {"name": "Configuração Gemini",  "status": "waiting"},
+        {"name": "Geração de Markdown",  "status": "waiting"},
+        {"name": "Apostila PDF",         "status": "waiting"},
+        {"name": "Geração de Vídeo",     "status": "waiting"},
+    ],
+    "error": None,
+    "apostila_path": None,
+    "video_path": None,
+    "video_paths": {},
+    "scripts": {},
+    "scenes":  [],
+    # Seleção de disciplinas
+    "all_disciplines":      [],   # todas encontradas no PDF
+    "selected_disciplines": [],   # selecionadas pelo usuário para gerar conteúdo
+    "current_discipline":   None, # disciplina sendo processada agora (fase 3)
+    "total_disciplines":    0,
+    "done_disciplines":     0,
+    # Estado intermediário do pipeline (para retomar após seleção)
+    "_pipeline_ctx": {},
 }
 
-pipeline_lock = threading.Lock()
+def set_stage(index, status):
+    pipeline_state["stage"] = index
+    pipeline_state["stages"][index]["status"] = status
 
+def reset_state():
+    pipeline_state["stage"] = 0
+    pipeline_state["status"] = "idle"
+    pipeline_state["error"] = None
+    pipeline_state["apostila_path"] = None
+    pipeline_state["video_path"] = None
+    pipeline_state["video_paths"] = {}
+    pipeline_state["scripts"] = {}
+    pipeline_state["scenes"]  = []
+    pipeline_state["all_disciplines"]      = []
+    pipeline_state["selected_disciplines"] = []
+    pipeline_state["current_discipline"]   = None
+    pipeline_state["total_disciplines"]    = 0
+    pipeline_state["done_disciplines"]     = 0
+    pipeline_state["_pipeline_ctx"]        = {}
+    for s in pipeline_state["stages"]:
+        s["status"] = "waiting"
 
-def reset_pipeline():
-    with pipeline_lock:
-        pipeline_state["status"]         = "idle"
-        pipeline_state["stage"]          = 0
-        pipeline_state["stages"]         = [{"name": n, "status": "waiting"} for n in STAGE_NAMES]
-        pipeline_state["error"]          = None
-        pipeline_state["last_apostila"]  = None
-        pipeline_state["video_paths"]    = {}
-        pipeline_state["uploaded_files"] = []
-        pipeline_state["instructions"]   = ""
-
-
-def set_stage(index: int, status: str):
-    with pipeline_lock:
-        pipeline_state["stage"] = index
-        pipeline_state["stages"][index]["status"] = status
-
-
-# ---------------------------------------------------------------------------
-# Pipeline principal em thread
-# ---------------------------------------------------------------------------
-
-def run_pipeline(file_paths: list[str], instructions: str):
-    """
-    Executa as etapas 0-6 (extração → apostila PDF).
-    Ao final entra em awaiting_approval para o usuário revisar.
-    """
-    caminho_json  = str(DATA_JSON / "base_geral.json")
-    caminho_index = str(DATA_FAISS / "faiss_index.bin")
-
+# =========================
+# PIPELINE EM THREAD
+# =========================
+def run_pipeline():
     try:
-        # Imports dentro do try para capturar erros de dependência ausente
-        from src.pdf_csv.pdf_csv import extrair_pdf_para_csv
-        from src.syllabus_extractor.csv_processor import extrair_base_csv
-        from src.content_generation.embedding_model import carregar_modelo, gerar_embeddings
-        from src.content_generation.faiss_index import criar_ou_carregar_index
-        from src.content_generation.rag_pipeline import buscar_chunks
-        from src.content_generation.generator import configurar_openai, gerar_documento
-        from src.output_formatter.markdown_generator import gerar_markdowns
-        from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
+        os.makedirs(PASTA_JSON, exist_ok=True)
+        os.makedirs(PASTA_INDEX, exist_ok=True)
 
-        with pipeline_lock:
-            pipeline_state["status"]       = "running"
-            pipeline_state["instructions"] = instructions
-
-        # ── Etapa 0: Extração de PDF → CSV → registros ───────────────────
+        # ── Stage 0: Extração ────────────────────────────────────────────────
         set_stage(0, "running")
+        pipeline_state["status"] = "running"
+        arquivos_pdf = [f for f in os.listdir(PASTA_PDFS) if f.endswith(".pdf")]
         base_geral = []
-        for caminho_pdf in file_paths:
-            nome_base   = Path(caminho_pdf).stem
-            caminho_csv = str(DATA_CSV / (nome_base + ".csv"))
-            extrair_pdf_para_csv(caminho_pdf, caminho_csv)
-            registros = extrair_base_csv(caminho_pdf, str(DATA_CSV), str(DATA_JSON))
-            if not registros:
-                raise Exception(
-                    f"Nenhum registro extraído de '{Path(caminho_pdf).name}'. "
-                    "Verifique se o PDF contém tabelas com Disciplina / Ementa / Conteúdo."
-                )
-            base_geral.extend(registros)
-        with open(caminho_json, "w", encoding="utf-8") as f:
+        for arquivo in arquivos_pdf:
+            caminho_pdf = os.path.join(PASTA_PDFS, arquivo)
+            paginas = processar_pdf(caminho_pdf)
+            base_ia = processar_semantico(paginas, arquivo)
+            base_geral.extend(base_ia)
+        with open(CAMINHO_JSON, "w", encoding="utf-8") as f:
             json.dump(base_geral, f, ensure_ascii=False, indent=2)
         set_stage(0, "done")
 
-        # ── Etapa 1: Validação da base ────────────────────────────────────
+        # ── Stage 1: Carregar base ───────────────────────────────────────────
         set_stage(1, "running")
+        base_geral = carregar_base(CAMINHO_JSON)
         if not base_geral:
             raise Exception("Base vazia após extração.")
-        print(f"✅ {len(base_geral)} registros carregados")
         set_stage(1, "done")
 
-        # ── Etapa 2: Embeddings ───────────────────────────────────────────
+        # ── Stage 2: Embeddings ──────────────────────────────────────────────
         set_stage(2, "running")
-        model      = carregar_modelo()
+        model = carregar_modelo()
         embeddings = gerar_embeddings(model, base_geral)
         set_stage(2, "done")
 
-        # ── Etapa 3: Índice FAISS ─────────────────────────────────────────
+        # ── Stage 3: Índice FAISS ────────────────────────────────────────────
         set_stage(3, "running")
-        index = criar_ou_carregar_index(caminho_index, embeddings, forcar_rebuild=True)
+        index = criar_ou_carregar_index(CAMINHO_INDEX, embeddings)
         set_stage(3, "done")
 
-        # ── Etapa 4: Setup LLM ────────────────────────────────────────────
+        # ── Stage 4: Configurar Gemini ───────────────────────────────────────
         set_stage(4, "running")
-        llm = configurar_openai()
+        gemini = configurar_gemini()
         set_stage(4, "done")
 
-        # ── Etapa 5: Geração Markdown ─────────────────────────────────────
+        # ── Pausa: seleção de disciplinas ────────────────────────────────────
+        # Extrai lista de disciplinas únicas para o usuário escolher
+        disciplinas_unicas = sorted({
+            item.get("disciplina", "").strip()
+            for item in base_geral
+            if item.get("disciplina", "").strip()
+        })
+        pipeline_state["all_disciplines"]  = disciplinas_unicas
+        pipeline_state["_pipeline_ctx"]    = {
+            "base_geral": base_geral,
+            "model":      model,
+            "index":      index,
+            "gemini":     gemini,
+        }
+        pipeline_state["status"] = "awaiting_discipline_selection"
+        # Pipeline pausa aqui — continua via POST /select-disciplines
+
+    except Exception as e:
+        pipeline_state["status"] = "error"
+        pipeline_state["error"] = str(e)
+        for s in pipeline_state["stages"]:
+            if s["status"] == "running":
+                s["status"] = "error"
+
+
+def run_pipeline_content(disciplinas_selecionadas: list[str]):
+    """
+    Continua o pipeline (stages 5–7) apenas com as disciplinas selecionadas.
+    Chamado após o usuário confirmar a seleção.
+    """
+    try:
+        ctx        = pipeline_state["_pipeline_ctx"]
+        base_geral = ctx["base_geral"]
+        model      = ctx["model"]
+        index      = ctx["index"]
+        gemini     = ctx["gemini"]
+
+        # Filtra base para as disciplinas selecionadas
+        if disciplinas_selecionadas:
+            base_filtrada = [
+                item for item in base_geral
+                if item.get("disciplina", "").strip() in disciplinas_selecionadas
+            ]
+        else:
+            base_filtrada = base_geral
+
+        pipeline_state["status"]           = "running"
+        pipeline_state["selected_disciplines"] = disciplinas_selecionadas
+        pipeline_state["total_disciplines"]    = len({
+            i.get("disciplina") for i in base_filtrada
+        })
+
+        def _on_disciplina(nome: str, concluidas: int, total: int):
+            pipeline_state["current_discipline"] = nome
+            pipeline_state["done_disciplines"]   = concluidas
+            pipeline_state["total_disciplines"]  = total
+
+        # ── Stage 5: Geração de Markdown ────────────────────────────────────
         set_stage(5, "running")
         gerar_markdowns(
-            base_geral=base_geral,
+            base_geral=base_filtrada,
             buscar_chunks=buscar_chunks,
             gerar_documento=gerar_documento,
             model=model,
             index=index,
-            gemini=llm,
-            pasta_saida=str(DATA_MARKDOWN),
+            gemini=gemini,
+            pasta_saida=PASTA_MARKDOWN,
+            on_disciplina=_on_disciplina,
+            base_rag=base_geral,   # usa a base COMPLETA para o RAG — evita index out of range
         )
+        pipeline_state["current_discipline"] = None
         set_stage(5, "done")
 
-        # ── Etapa 6: PDF da Apostila ──────────────────────────────────────
+        # ── Stage 6: Apostila PDF (não-fatal: continua mesmo sem wkhtmltopdf) ──
         set_stage(6, "running")
-        gerar_apostilas_por_curso(
-            pasta_markdown=str(DATA_MARKDOWN),
-            pasta_pdf=str(DATA_PDF),
-            logo_path=str(LOGO_PATH),
-        )
-        # Registra o primeiro PDF gerado como apostila disponível para download
-        pdfs = sorted(DATA_PDF.rglob("*.pdf"))
-        if pdfs:
-            with pipeline_lock:
-                pipeline_state["last_apostila"] = str(pdfs[-1])
-        set_stage(6, "done")
+        try:
+            gerar_apostilas_por_curso(
+                pasta_markdown=PASTA_MARKDOWN,
+                pasta_pdf=PASTA_PDF,
+                logo_path=LOGO_PATH
+            )
+            set_stage(6, "done")
+            pdfs = [f for f in os.listdir(PASTA_PDF) if f.endswith(".pdf")]
+            if pdfs:
+                pipeline_state["apostila_path"] = os.path.join(PASTA_PDF, pdfs[0])
+        except Exception as e_apostila:
+            # Apostila falhou (ex: wkhtmltopdf não instalado) — apenas avisa e continua
+            set_stage(6, "error")
+            pipeline_state["error"] = f"Apostila: {e_apostila} (pipeline continua)"
+            print(f"AVISO - Apostila nao gerada: {e_apostila}")
 
-        with pipeline_lock:
-            pipeline_state["status"] = "awaiting_approval"
+        pipeline_state["status"] = "awaiting_approval"
 
     except Exception as e:
-        tb = traceback.format_exc()
-        print(f"❌ Pipeline error:\n{tb}")
-        with pipeline_lock:
-            pipeline_state["status"] = "error"
-            pipeline_state["error"]  = f"{e}\n\nDetalhes:\n{tb}"
-            idx = pipeline_state["stage"]
-            if 0 <= idx < len(STAGE_NAMES):
-                pipeline_state["stages"][idx]["status"] = "error"
+        pipeline_state["status"] = "error"
+        pipeline_state["error"] = str(e)
+        for s in pipeline_state["stages"]:
+            if s["status"] == "running":
+                s["status"] = "error"
 
 
 def run_video():
     """
-    Etapa 7: gera os vídeos usando pipeline_video.py (roteiro via OpenAI + HeyGen v2).
-    Disparado após /approve.
+    Etapa 7 (nova): gera roteiros de produção a partir dos markdowns gerados
+    e aguarda aprovação do usuário antes de chamar o HeyGen.
     """
     try:
         set_stage(7, "running")
-        openai_token = os.getenv("OPENAI_API_KEY")
-        heygen_token = os.getenv("HEYGEN_API_KEY")
+        gemini_token = os.getenv("GEMINI_API_KEY")
+        if not gemini_token:
+            raise Exception("GEMINI_API_KEY não configurada.")
 
-        if not heygen_token:
-            raise Exception("HEYGEN_API_KEY não encontrada. Configure no .env.")
+        pipeline_state["status"] = "generating_scripts"
 
-        gerar_videos_por_disciplina(
-            pasta_markdown=str(DATA_MARKDOWN),
-            pasta_saida=str(DATA_VIDEO),
-            openai_token=openai_token,
-            heyGen_token=heygen_token,
-        )
+        # Lê todos os markdowns gerados e cria um roteiro por disciplina
+        scripts = {}
+        for curso in os.listdir(PASTA_MARKDOWN):
+            caminho_curso = os.path.join(PASTA_MARKDOWN, curso)
+            if not os.path.isdir(caminho_curso):
+                continue
+            for arquivo in os.listdir(caminho_curso):
+                if not arquivo.endswith(".md"):
+                    continue
+                disciplina = arquivo.replace(".md", "").replace("_", " ")
+                caminho_md = os.path.join(caminho_curso, arquivo)
+                with open(caminho_md, "r", encoding="utf-8") as f:
+                    markdown_text = f.read()
+
+                print(f"Gerando roteiro: {disciplina}")
+                roteiro = gerar_roteiro(markdown_text, disciplina, gemini_token)
+                chave = f"{curso}|{arquivo.replace('.md', '')}"
+                scripts[chave] = {
+                    "nome":        disciplina,
+                    "curso":       curso,
+                    "arquivo_md":  caminho_md,
+                    "roteiro":     roteiro,
+                }
+                import time as _time
+                _time.sleep(2)  # evita rate limit
+
+        pipeline_state["scripts"] = scripts
+        pipeline_state["status"]  = "awaiting_scripts_approval"
         set_stage(7, "done")
 
-        # Indexa os vídeos gerados por nome de disciplina (pasta pai do arquivo)
-        video_paths: dict[str, str] = {}
-        for root, _, files in os.walk(str(DATA_VIDEO)):
-            for f in files:
-                if f.lower().endswith((".mp4", ".avi", ".mov", ".webm")):
-                    disciplina = os.path.basename(root)
-                    video_paths[disciplina] = os.path.join(root, f)
-
-        with pipeline_lock:
-            pipeline_state["video_paths"] = video_paths
-            pipeline_state["status"]      = "done"
+        # Persiste roteiros em disco para retomada futura
+        os.makedirs("data/output", exist_ok=True)
+        with open(ARQUIVO_ROTEIROS, "w", encoding="utf-8") as f:
+            json.dump(scripts, f, ensure_ascii=False, indent=2)
 
     except Exception as e:
-        with pipeline_lock:
-            pipeline_state["status"] = "error"
-            pipeline_state["error"]  = str(e)
+        pipeline_state["status"] = "error"
+        pipeline_state["error"]  = str(e)
         set_stage(7, "error")
 
 
-# ---------------------------------------------------------------------------
-# ── ROTAS PRINCIPAIS ────────────────────────────────────────────────────────
-# ---------------------------------------------------------------------------
+def run_heygen_videos(cenas_aprovadas: list):
+    """Gera vídeos HeyGen para as disciplinas aprovadas."""
+    try:
+        pipeline_state["status"] = "generating_video"
+        heygen_token = os.getenv("HEYGEN_API_KEY")
+        if not heygen_token:
+            raise Exception("HEYGEN_API_KEY não configurada.")
+
+        falas = extrair_falas_do_roteiro(cenas_aprovadas)
+        if not falas:
+            raise Exception("Nenhuma fala encontrada nas cenas aprovadas.")
+
+        video_paths: dict[str, str] = {}
+        os.makedirs(PASTA_VIDEO, exist_ok=True)
+
+        for disciplina, fala in falas.items():
+            print(f"Gerando video: {disciplina}")
+            video_id = gerar_video_heygen(fala, disciplina, heygen_token)
+            info     = aguardar_video(video_id, heygen_token)
+
+            if info.get("video_url"):
+                import requests as req
+                slug   = re.sub(r"[^\w]", "_", disciplina)[:60]
+                caminho = os.path.join(PASTA_VIDEO, f"{slug}.mp4")
+                video_bytes = req.get(info["video_url"], timeout=60).content
+                with open(caminho, "wb") as f:
+                    f.write(video_bytes)
+                video_paths[disciplina] = caminho
+
+        pipeline_state["video_paths"] = video_paths
+        pipeline_state["video_path"]  = list(video_paths.values())[0] if video_paths else None
+        pipeline_state["status"]      = "done"
+
+    except Exception as e:
+        pipeline_state["status"] = "error"
+        pipeline_state["error"]  = str(e)
+
+
+# =========================
+# APP FASTAPI
+# =========================
+app = FastAPI(title="ATRIA San Marino API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/check-existing")
+def check_existing():
+    """
+    Verifica se existem artefatos gerados em sessões anteriores.
+    Retorna o que está disponível para retomar o pipeline.
+    """
+    resultado = {
+        "tem_markdown":    False,
+        "tem_apostila":    False,
+        "tem_base_json":   False,
+        "tem_roteiros":    False,
+        "tem_cenas":       False,
+        "disciplinas_md":  [],
+        "cursos_md":       [],
+        "apostilas":       [],
+        "num_roteiros":    0,
+        "num_cenas":       0,
+    }
+
+    if os.path.exists(CAMINHO_JSON):
+        resultado["tem_base_json"] = True
+
+    if os.path.exists(PASTA_MARKDOWN):
+        for curso in os.listdir(PASTA_MARKDOWN):
+            caminho_curso = os.path.join(PASTA_MARKDOWN, curso)
+            if not os.path.isdir(caminho_curso):
+                continue
+            arquivos_md = [f.replace(".md", "").replace("_", " ")
+                           for f in os.listdir(caminho_curso) if f.endswith(".md")]
+            if arquivos_md:
+                resultado["tem_markdown"] = True
+                resultado["cursos_md"].append(curso)
+                resultado["disciplinas_md"].extend(arquivos_md)
+
+    if os.path.exists(PASTA_PDF):
+        pdfs = [f for f in os.listdir(PASTA_PDF) if f.endswith(".pdf")]
+        if pdfs:
+            resultado["tem_apostila"] = True
+            resultado["apostilas"] = pdfs
+
+    if os.path.exists(ARQUIVO_ROTEIROS):
+        try:
+            with open(ARQUIVO_ROTEIROS, encoding="utf-8") as f:
+                roteiros = json.load(f)
+            resultado["tem_roteiros"] = bool(roteiros)
+            resultado["num_roteiros"] = len(roteiros)
+        except Exception:
+            pass
+
+    if os.path.exists(ARQUIVO_CENAS):
+        try:
+            with open(ARQUIVO_CENAS, encoding="utf-8") as f:
+                cenas = json.load(f)
+            resultado["tem_cenas"] = bool(cenas)
+            resultado["num_cenas"] = len(cenas)
+        except Exception:
+            pass
+
+    return resultado
+
+
+@app.post("/retomar-de-roteiros")
+def retomar_de_roteiros():
+    """Retoma o pipeline carregando os roteiros salvos em disco."""
+    if not os.path.exists(ARQUIVO_ROTEIROS):
+        return JSONResponse(status_code=400, content={"error": "Arquivo de roteiros não encontrado."})
+
+    with open(ARQUIVO_ROTEIROS, encoding="utf-8") as f:
+        scripts = json.load(f)
+
+    reset_state()
+    for i in range(7):
+        set_stage(i, "done")
+    pipeline_state["scripts"] = scripts
+    pipeline_state["status"]  = "awaiting_scripts_approval"
+    return {"message": f"{len(scripts)} roteiro(s) carregado(s). Pronto para revisão."}
+
+
+@app.post("/retomar-de-cenas")
+def retomar_de_cenas():
+    """Retoma o pipeline carregando as cenas salvas em disco — útil quando o HeyGen falha."""
+    if not os.path.exists(ARQUIVO_CENAS):
+        return JSONResponse(status_code=400, content={"error": "Arquivo de cenas não encontrado."})
+
+    with open(ARQUIVO_CENAS, encoding="utf-8") as f:
+        cenas = json.load(f)
+
+    reset_state()
+    for i in range(7):
+        set_stage(i, "done")
+    pipeline_state["scenes"] = cenas
+    pipeline_state["status"] = "awaiting_scenes_approval"
+    return {"message": f"{len(cenas)} disciplina(s) com cenas carregadas. Pronto para gerar vídeos."}
+
+
+@app.post("/retomar-de-markdown")
+def retomar_de_markdown():
+    """
+    Retoma o pipeline a partir dos markdowns já gerados.
+    Pula extração de PDF, embeddings, RAG e geração de markdown.
+    Vai direto para geração de apostila → awaiting_approval.
+    """
+    if not os.path.exists(PASTA_MARKDOWN):
+        return JSONResponse(status_code=400, content={"error": "Nenhum markdown encontrado."})
+
+    reset_state()
+    pipeline_state["status"] = "running"
+    set_stage(5, "done")  # Markdown já está pronto
+
+    def _retomar():
+        try:
+            # Marca stages anteriores como done
+            for i in range(6):
+                set_stage(i, "done")
+
+            # Verifica se a apostila já existe — evita regenerar
+            pdfs_existentes = []
+            if os.path.exists(PASTA_PDF):
+                pdfs_existentes = [f for f in os.listdir(PASTA_PDF) if f.endswith(".pdf")]
+
+            if pdfs_existentes:
+                # Apostila já existe — só aponta para ela
+                set_stage(6, "done")
+                pipeline_state["apostila_path"] = os.path.join(PASTA_PDF, pdfs_existentes[0])
+                print(f"Apostila existente reutilizada: {pdfs_existentes[0]}")
+            else:
+                # Gera a apostila
+                set_stage(6, "running")
+                try:
+                    gerar_apostilas_por_curso(
+                        pasta_markdown=PASTA_MARKDOWN,
+                        pasta_pdf=PASTA_PDF,
+                        logo_path=LOGO_PATH
+                    )
+                    set_stage(6, "done")
+                    pdfs = [f for f in os.listdir(PASTA_PDF) if f.endswith(".pdf")]
+                    if pdfs:
+                        pipeline_state["apostila_path"] = os.path.join(PASTA_PDF, pdfs[0])
+                except Exception as e_ap:
+                    set_stage(6, "error")
+                    print(f"Apostila nao gerada: {e_ap}")
+
+            pipeline_state["status"] = "awaiting_approval"
+        except Exception as e:
+            pipeline_state["status"] = "error"
+            pipeline_state["error"] = str(e)
+
+    threading.Thread(target=_retomar, daemon=True).start()
+    return {"message": "Retomando a partir dos markdowns existentes..."}
+
 
 @app.post("/upload")
-async def upload_pdfs(
-    background_tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...),
-    instructions: str = Form(""),
-    suggestions: str = Form(""),
-):
-    if not files:
-        raise HTTPException(400, "Nenhum arquivo enviado.")
+async def upload_pdfs(files: list[UploadFile] = File(...)):
+    if pipeline_state["status"] == "running":
+        return JSONResponse(status_code=400, content={"error": "Pipeline já está em execução."})
 
-    reset_pipeline()
-    saved_paths = []
+    reset_state()
 
-    for upload in files:
-        if not upload.filename.lower().endswith(".pdf"):
-            raise HTTPException(400, f"Arquivo '{upload.filename}' não é um PDF.")
-        dest = DATA_INPUT / upload.filename
-        dest.write_bytes(await upload.read())
-        saved_paths.append(str(dest))
+    # Limpa PDFs anteriores para não misturar cursos de sessões antigas
+    if os.path.exists(PASTA_PDFS):
+        for arquivo_antigo in os.listdir(PASTA_PDFS):
+            if arquivo_antigo.endswith(".pdf"):
+                try:
+                    os.remove(os.path.join(PASTA_PDFS, arquivo_antigo))
+                except Exception:
+                    pass
 
-    with pipeline_lock:
-        pipeline_state["uploaded_files"] = [Path(p).name for p in saved_paths]
+    # Remove índice FAISS antigo para ser reconstruído com os novos dados
+    if os.path.exists(CAMINHO_INDEX):
+        try:
+            os.remove(CAMINHO_INDEX)
+        except Exception:
+            pass
 
-    effective_instructions = instructions
-    if suggestions:
-        effective_instructions += f"\n\nSugestões de alteração do usuário: {suggestions}"
+    os.makedirs(PASTA_PDFS, exist_ok=True)
 
-    threading.Thread(
-        target=run_pipeline,
-        args=(saved_paths, effective_instructions),
-        daemon=True,
-    ).start()
+    for file in files:
+        path = os.path.join(PASTA_PDFS, file.filename)
+        with open(path, "wb") as f:
+            f.write(await file.read())
 
-    return {"ok": True, "files": [Path(p).name for p in saved_paths]}
+    thread = threading.Thread(target=run_pipeline, daemon=True)
+    thread.start()
+
+    return {"message": f"{len(files)} PDF(s) recebido(s). Pipeline iniciado."}
 
 
 @app.get("/status")
-async def get_status():
-    with pipeline_lock:
-        return {
-            "status": pipeline_state["status"],
-            "stage":  pipeline_state["stage"],
-            "stages": pipeline_state["stages"],
-            "error":  pipeline_state["error"],
-            "videos": list(pipeline_state["video_paths"].keys()),
-        }
+def get_status():
+    return {
+        "status":              pipeline_state["status"],
+        "stage":               pipeline_state["stage"],
+        "stages":              pipeline_state["stages"],
+        "error":               pipeline_state["error"],
+        "videos":              list(pipeline_state["video_paths"].keys()),
+        "scenes":              pipeline_state.get("scenes", []),
+        "all_disciplines":     pipeline_state.get("all_disciplines", []),
+        "selected_disciplines":pipeline_state.get("selected_disciplines", []),
+        "current_discipline":  pipeline_state.get("current_discipline"),
+        "done_disciplines":    pipeline_state.get("done_disciplines", 0),
+        "total_disciplines":   pipeline_state.get("total_disciplines", 0),
+    }
+
+
+@app.get("/disciplines")
+def get_disciplines():
+    """Lista todas as disciplinas encontradas no PDF carregado."""
+    discs = pipeline_state.get("all_disciplines", [])
+    if not discs:
+        return JSONResponse(status_code=404, content={"error": "Nenhuma disciplina disponível ainda."})
+    return {"disciplines": discs}
+
+
+@app.post("/select-disciplines")
+async def select_disciplines(body: dict = {}):
+    """
+    Recebe as disciplinas selecionadas pelo usuário e continua o pipeline
+    (stages 5–7) apenas com elas.
+    Body: { "selected": ["Disciplina A", "Disciplina B", ...] }
+    """
+    if pipeline_state["status"] != "awaiting_discipline_selection":
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {pipeline_state['status']}"})
+
+    selecionadas = body.get("selected", pipeline_state.get("all_disciplines", []))
+    if not selecionadas:
+        return JSONResponse(status_code=400, content={"error": "Selecione ao menos uma disciplina."})
+
+    thread = threading.Thread(target=run_pipeline_content, args=(selecionadas,), daemon=True)
+    thread.start()
+
+    return {"message": f"{len(selecionadas)} disciplina(s) selecionada(s). Gerando conteúdo..."}
 
 
 @app.get("/download/apostila")
-async def download_apostila():
-    with pipeline_lock:
-        apostila = pipeline_state.get("last_apostila")
-
-    if not apostila or not Path(apostila).exists():
-        pdfs = sorted(DATA_PDF.rglob("*.pdf"))
-        if not pdfs:
-            raise HTTPException(404, "Nenhuma apostila gerada ainda.")
-        apostila = str(pdfs[-1])
-
-    path = Path(apostila)
-    return FileResponse(
-        path=str(path),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
-    )
+def download_apostila():
+    path = pipeline_state.get("apostila_path")
+    if not path or not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": "Apostila não encontrada."})
+    return FileResponse(path, media_type="application/pdf", filename=os.path.basename(path))
 
 
 @app.post("/approve")
-async def approve_content():
-    """Aprova o conteúdo e dispara a geração real de vídeo em background."""
-    with pipeline_lock:
-        if pipeline_state["status"] != "awaiting_approval":
-            raise HTTPException(400, "Pipeline não está aguardando aprovação.")
-        pipeline_state["status"] = "running"
+def approve():
+    if pipeline_state["status"] != "awaiting_approval":
+        return JSONResponse(status_code=400, content={"error": "Pipeline não está aguardando aprovação."})
 
-    threading.Thread(target=run_video, daemon=True).start()
-    return {"ok": True, "message": "Aprovado. Gerando vídeos..."}
+    pipeline_state["status"] = "running"
+    thread = threading.Thread(target=run_video, daemon=True)
+    thread.start()
+
+    return {"message": "Aprovado. Gerando roteiros de produção..."}
 
 
 @app.post("/reject")
-async def reject_content():
-    reset_pipeline()
-    return {"ok": True, "message": "Pipeline resetado."}
+def reject():
+    reset_state()
+    return {"message": "Pipeline resetado. Faça novo upload."}
 
 
-@app.post("/approve/script")
-async def approve_script():
-    with pipeline_lock:
-        if pipeline_state["status"] not in ("done", "awaiting_approval"):
-            raise HTTPException(400, "Pipeline não está em estado de aprovação de roteiro.")
-    return {"ok": True, "message": "Roteiros aprovados."}
+@app.get("/scripts")
+def get_scripts():
+    """Retorna os roteiros gerados, prontos para revisão."""
+    scripts = pipeline_state.get("scripts", {})
+    if not scripts:
+        return JSONResponse(status_code=404, content={"error": "Nenhum roteiro disponível."})
+    return {"scripts": scripts}
 
 
-@app.post("/reject/script")
-async def reject_script():
-    reset_pipeline()
-    return {"ok": True, "message": "Roteiros rejeitados. Pipeline resetado."}
+@app.post("/approve/scripts")
+async def approve_scripts(body: dict = {}):
+    """
+    Recebe os roteiros editados, parseia cenas e aguarda aprovação das cenas.
+    Body: { "scripts": { "chave": { "nome": ..., "roteiro": ... }, ... } }
+    """
+    if pipeline_state["status"] != "awaiting_scripts_approval":
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {pipeline_state['status']}"})
+
+    if "scripts" in body:
+        pipeline_state["scripts"] = body["scripts"]
+
+    # Parseia as cenas de todos os roteiros aprovados
+    todos_roteiros = pipeline_state["scripts"]
+    roteiro_unificado = "\n\n".join(
+        f"DISCIPLINA: {v['nome']}\n{v['roteiro']}"
+        for v in todos_roteiros.values()
+    )
+    cenas = parsear_cenas_do_roteiro(roteiro_unificado)
+    pipeline_state["scenes"]  = cenas
+    pipeline_state["status"]  = "awaiting_scenes_approval"
+
+    # Persiste cenas em disco para retomada futura
+    with open(ARQUIVO_CENAS, "w", encoding="utf-8") as f:
+        json.dump(cenas, f, ensure_ascii=False, indent=2)
+
+    return {"message": f"Roteiros aprovados. {len(cenas)} disciplina(s) com cenas prontas para revisão."}
 
 
-class RedoBody(BaseModel):
-    suggestions: str = ""
+@app.post("/approve/scenes")
+async def approve_scenes_pipeline(body: dict = {}):
+    """
+    Recebe as cenas editadas (com seleção) e dispara geração dos vídeos.
+    Body: { "scenes": [ { "disciplina": ..., "cenas": [...], "selecionada": true }, ... ] }
+    """
+    if pipeline_state["status"] != "awaiting_scenes_approval":
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {pipeline_state['status']}"})
+
+    cenas_aprovadas = body.get("scenes", pipeline_state["scenes"])
+    pipeline_state["scenes"] = cenas_aprovadas
+
+    thread = threading.Thread(target=run_heygen_videos, args=(cenas_aprovadas,), daemon=True)
+    thread.start()
+
+    selecionadas = sum(1 for c in cenas_aprovadas if c.get("selecionada", True))
+    return {"message": f"Cenas aprovadas. Gerando {selecionadas} vídeo(s) no HeyGen..."}
 
 
-@app.post("/redo")
-async def redo_pipeline(body: RedoBody):
-    """Re-executa o pipeline com os arquivos já salvos + sugestões do usuário."""
-    with pipeline_lock:
-        saved_names = list(pipeline_state.get("uploaded_files", []))
-
-    if not saved_names:
-        raise HTTPException(400, "Nenhum arquivo encontrado. Faça upload novamente.")
-
-    existing = [str(DATA_INPUT / n) for n in saved_names if (DATA_INPUT / n).exists()]
-    if not existing:
-        raise HTTPException(400, "Arquivos originais não encontrados. Faça upload novamente.")
-
-    effective_instructions = ""
-    if body.suggestions:
-        effective_instructions = f"\n\nSugestões de alteração do usuário: {body.suggestions}"
-
-    reset_pipeline()
-    with pipeline_lock:
-        pipeline_state["uploaded_files"] = saved_names
-
-    threading.Thread(
-        target=run_pipeline,
-        args=(existing, effective_instructions),
-        daemon=True,
-    ).start()
-    return {"ok": True}
-
-
+# ✅ NOVO — lista todos os vídeos prontos
 @app.get("/videos")
-async def list_videos():
-    """Lista vídeos disponíveis por nome de disciplina."""
-    with pipeline_lock:
-        video_paths = dict(pipeline_state.get("video_paths", {}))
-
-    if video_paths:
-        return {"videos": sorted(video_paths.keys())}
-
-    # Fallback: varre o filesystem (vídeos de sessões anteriores)
-    videos = []
-    for root, _, files in os.walk(str(DATA_VIDEO)):
-        for f in files:
-            if f.lower().endswith((".mp4", ".avi", ".mov", ".webm")):
-                videos.append(f)
-    return {"videos": sorted(set(videos))}
+def list_videos():
+    paths = pipeline_state.get("video_paths", {})
+    if not paths:
+        return JSONResponse(status_code=404, content={"error": "Nenhum vídeo encontrado."})
+    return {"videos": list(paths.keys())}
 
 
+# ✅ NOVO — baixa vídeo por nome da disciplina
 @app.get("/download/video/{nome}")
-async def download_video(nome: str):
-    """Baixa vídeo por nome de disciplina (estado) ou nome de arquivo (fallback)."""
-    with pipeline_lock:
-        video_paths = dict(pipeline_state.get("video_paths", {}))
-
-    # Tenta por nome de disciplina
-    path_str = video_paths.get(nome)
-    if path_str and Path(path_str).exists():
-        path = Path(path_str)
-        return FileResponse(
-            path=str(path),
-            media_type="video/mp4",
-            headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
-        )
-
-    # Fallback: busca por nome de arquivo dentro de DATA_VIDEO
-    matches = list(DATA_VIDEO.rglob(nome))
-    if not matches:
-        raise HTTPException(404, f"Vídeo '{nome}' não encontrado.")
-    path = matches[0]
-    return FileResponse(
-        path=str(path),
-        media_type="video/mp4",
-        headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
-    )
+def download_video_por_nome(nome: str):
+    paths = pipeline_state.get("video_paths", {})
+    path = paths.get(nome)
+    if not path or not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": f"Vídeo '{nome}' não encontrado."})
+    return FileResponse(path, media_type="video/mp4", filename=f"{nome}.mp4")
 
 
-# ---------------------------------------------------------------------------
-# ── DASHBOARD ───────────────────────────────────────────────────────────────
-# ---------------------------------------------------------------------------
-
-@app.get("/cursos")
-async def list_cursos():
-    cursos = []
-    if not DATA_PDF.exists():
-        return {"cursos": []}
-
-    for entry in sorted(DATA_PDF.iterdir()):
-        if not entry.is_dir():
-            continue
-        apostilas = []
-        for pdf in sorted(entry.glob("*.pdf")):
-            stat = pdf.stat()
-            apostilas.append({
-                "nome":   pdf.name,
-                "data":   datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d"),
-                "status": "gerada",
-            })
-        cursos.append({"nome": entry.name, "pasta": entry.name, "apostilas": apostilas})
-    return {"cursos": cursos}
+# ✅ MANTIDO por compatibilidade com frontend antigo
+@app.get("/download/video")
+def download_video():
+    path = pipeline_state.get("video_path")
+    if not path or not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": "Vídeo não encontrado."})
+    return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
 
 
-@app.get("/download/apostila/{nome_arquivo}")
-async def download_apostila_por_nome(nome_arquivo: str):
-    matches = list(DATA_PDF.rglob(nome_arquivo))
-    if not matches:
-        raise HTTPException(404, f"Apostila '{nome_arquivo}' não encontrada.")
-    path = matches[0]
-    return FileResponse(
-        path=str(path),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
-    )
-
-
-# ---------------------------------------------------------------------------
-# ── GERADOR DE VÍDEOS DIRETO (/gerador-videos/*) ────────────────────────────
-# Fluxo: PDF → Markdown → Roteiro → Cenas → Vídeo HeyGen
-# Cada etapa aguarda aprovação do usuário antes de avançar.
-# ---------------------------------------------------------------------------
+# =============================================================================
+# GERADOR DE VÍDEOS DIRETO — /gerador-videos/*
+# Fluxo com aprovação por etapa: PDF → MD → Roteiro → Cenas → Vídeo
+# =============================================================================
 
 _jobs: dict[str, dict] = {}
 
+PASTA_JOBS = "data/output/jobs"
 
-def _pasta_job(job_id: str) -> Path:
-    pasta = PASTA_JOBS / job_id
-    pasta.mkdir(parents=True, exist_ok=True)
+
+def _pasta_job(job_id: str) -> str:
+    pasta = os.path.join(PASTA_JOBS, job_id)
+    os.makedirs(pasta, exist_ok=True)
     return pasta
 
 
 def salvar_job(job_id: str):
-    """Persiste o estado do job e seus artefatos em disco."""
-    job = _jobs.get(job_id)
+    """
+    Persiste em disco o estado atual do job e seus artefatos.
+
+    Estrutura gerada:
+      data/output/jobs/{job_id}/
+        job.json       ← estado completo (permite retomar)
+        markdown.md    ← gerado após etapa 1
+        roteiro.md     ← gerado após etapa 3
+        cenas.json     ← gerado após etapa 5
+        videos/        ← preenchida após etapa 7
+    """
+    job   = _jobs.get(job_id)
     if not job:
         return
+
     pasta = _pasta_job(job_id)
 
-    with open(pasta / "job.json", "w", encoding="utf-8") as f:
+    # Estado completo
+    with open(os.path.join(pasta, "job.json"), "w", encoding="utf-8") as f:
         json.dump(job, f, ensure_ascii=False, indent=2, default=str)
 
+    # Artefatos textuais
     if job.get("markdown"):
-        (pasta / "markdown.md").write_text(job["markdown"], encoding="utf-8")
+        with open(os.path.join(pasta, "markdown.md"), "w", encoding="utf-8") as f:
+            f.write(job["markdown"])
+
     if job.get("script"):
-        (pasta / "roteiro.md").write_text(job["script"], encoding="utf-8")
+        with open(os.path.join(pasta, "roteiro.md"), "w", encoding="utf-8") as f:
+            f.write(job["script"])
+
     if job.get("scenes"):
-        with open(pasta / "cenas.json", "w", encoding="utf-8") as f:
+        with open(os.path.join(pasta, "cenas.json"), "w", encoding="utf-8") as f:
             json.dump(job["scenes"], f, ensure_ascii=False, indent=2)
 
 
 def _extrair_em_background(job_id: str, caminho_pdf: str):
-    """Etapa 1: extrai texto do PDF e estrutura em Markdown via OpenAI."""
+    """Etapa 1: extrai o texto do PDF e usa Gemini para estruturar em Markdown."""
     try:
-        openai_token = os.getenv("OPENAI_API_KEY")
-        resultado = extrair_markdown_do_pdf(caminho_pdf, openai_token)
+        gemini_token = os.getenv("GEMINI_API_KEY")
+        resultado = extrair_markdown_do_pdf(caminho_pdf, gemini_token)
         _jobs[job_id].update({
             "state":      "awaiting_md_approval",
             "disciplina": resultado["disciplina"],
@@ -563,11 +779,11 @@ def _extrair_em_background(job_id: str, caminho_pdf: str):
 
 
 def _gerar_roteiro_em_background(job_id: str):
-    """Etapa 3: gera roteiro de produção a partir do markdown aprovado via OpenAI."""
+    """Etapa 3: gera o roteiro a partir do markdown aprovado."""
     job          = _jobs[job_id]
-    openai_token = os.getenv("OPENAI_API_KEY")
+    gemini_token = os.getenv("GEMINI_API_KEY")
     try:
-        script = gerar_roteiro(job["markdown"], job["disciplina"], openai_token)
+        script = gerar_roteiro(job["markdown"], job["disciplina"], gemini_token)
         _jobs[job_id].update({"state": "awaiting_script_approval", "script": script})
         salvar_job(job_id)
     except Exception as e:
@@ -576,7 +792,10 @@ def _gerar_roteiro_em_background(job_id: str):
 
 
 def _gerar_cenas_em_background(job_id: str):
-    """Etapa 5: parseia o roteiro aprovado e extrai estrutura de cenas (sem LLM)."""
+    """
+    Etapa 5: parseia o roteiro aprovado e extrai a estrutura de cenas.
+    Sem chamada ao Gemini — instantâneo, zero tokens extras.
+    """
     job = _jobs[job_id]
     try:
         cenas = parsear_cenas_do_roteiro(job["script"])
@@ -593,36 +812,42 @@ def _gerar_cenas_em_background(job_id: str):
 
 
 def _gerar_video_em_background(job_id: str):
-    """Etapa 7: envia as falas das disciplinas selecionadas para o HeyGen v3."""
+    """
+    Etapa 7: extrai as falas das disciplinas SELECIONADAS e gera um vídeo
+    por disciplina no HeyGen. Salva os vídeos na pasta do job.
+    """
     job          = _jobs[job_id]
     heygen_token = os.getenv("HEYGEN_API_KEY")
     pasta        = _pasta_job(job_id)
-    pasta_videos = pasta / "videos"
-    pasta_videos.mkdir(exist_ok=True)
+    pasta_videos = os.path.join(pasta, "videos")
+    os.makedirs(pasta_videos, exist_ok=True)
 
     try:
+        # Filtra apenas disciplinas selecionadas
         cenas = job.get("scenes", [])
-        cenas_selecionadas = (
-            [d for d in cenas if d.get("selecionada", True)]
-            if isinstance(cenas, list) else cenas
-        )
+        if isinstance(cenas, list):
+            cenas_selecionadas = [d for d in cenas if d.get("selecionada", True)]
+        else:
+            cenas_selecionadas = cenas
 
         falas_por_disciplina = extrair_falas_do_roteiro(cenas_selecionadas)
+
         if not falas_por_disciplina:
             raise ValueError(
                 "Nenhuma fala encontrada nas disciplinas selecionadas. "
                 "Verifique se as disciplinas estão marcadas e se as falas estão preenchidas."
             )
 
-        import requests as req
         videos = []
         for disciplina, fala in falas_por_disciplina.items():
             video_id = gerar_video_heygen(fala, disciplina, heygen_token)
             info     = aguardar_video(video_id, heygen_token)
 
+            # Salva o vídeo em disco
             slug          = re.sub(r"[^\w]", "_", disciplina)[:60]
-            caminho_video = str(pasta_videos / f"{slug}.mp4")
+            caminho_video = os.path.join(pasta_videos, f"{slug}.mp4")
             if info.get("video_url"):
+                import requests as req
                 video_bytes = req.get(info["video_url"], timeout=60).content
                 with open(caminho_video, "wb") as f:
                     f.write(video_bytes)
@@ -636,8 +861,8 @@ def _gerar_video_em_background(job_id: str):
             })
 
         _jobs[job_id].update({
-            "state":     "completed",
-            "videos":    videos,
+            "state":   "completed",
+            "videos":  videos,
             "video_url": videos[0]["video_url"] if videos else None,
             "duration":  videos[0]["duration"]  if videos else None,
         })
@@ -648,13 +873,13 @@ def _gerar_video_em_background(job_id: str):
         salvar_job(job_id)
 
 
-# ─── Rotas /gerador-videos/* ─────────────────────────────────────────────────
+# ─── Iniciar job ──────────────────────────────────────────────────────────────
 
 @app.post("/gerador-videos/iniciar")
 async def gerador_iniciar(file: UploadFile = File(...)):
-    """Recebe o PDF e inicia a extração de Markdown (etapa 1)."""
+    """Recebe o PDF e inicia a extração (etapa 1)."""
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Apenas arquivos PDF são aceitos.")
+        return JSONResponse(status_code=400, content={"error": "Apenas PDFs são aceitos."})
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(await file.read())
@@ -672,13 +897,21 @@ async def gerador_iniciar(file: UploadFile = File(...)):
     return {"job_id": job["job_id"]}
 
 
+# ─── Status ──────────────────────────────────────────────────────────────────
+
 @app.get("/gerador-videos/status/{job_id}")
 def gerador_status(job_id: str):
     """Retorna o job completo (state + conteúdos de cada etapa)."""
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(404, f"Job '{job_id}' não encontrado.")
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
     return job
+
+
+# ─── Aprovações ───────────────────────────────────────────────────────────────
+
+class AprovacaoMarkdown(dict):
+    pass
 
 
 @app.post("/gerador-videos/aprovar-markdown/{job_id}")
@@ -689,19 +922,15 @@ async def aprovar_markdown(job_id: str, body: dict = {}):
     """
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "Job não encontrado.")
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
     if job["state"] != "awaiting_md_approval":
-        raise HTTPException(400, f"Estado inválido: {job['state']}")
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {job['state']}"})
 
     if "markdown" in body:
         _jobs[job_id]["markdown"] = body["markdown"]
 
     _jobs[job_id]["state"] = "generating_script"
-    threading.Thread(
-        target=_gerar_roteiro_em_background,
-        args=(job_id,),
-        daemon=True,
-    ).start()
+    threading.Thread(target=_gerar_roteiro_em_background, args=(job_id,), daemon=True).start()
     return {"message": "Markdown aprovado. Gerando roteiro..."}
 
 
@@ -713,19 +942,15 @@ async def aprovar_roteiro(job_id: str, body: dict = {}):
     """
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "Job não encontrado.")
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
     if job["state"] != "awaiting_script_approval":
-        raise HTTPException(400, f"Estado inválido: {job['state']}")
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {job['state']}"})
 
     if "script" in body:
         _jobs[job_id]["script"] = body["script"]
 
     _jobs[job_id]["state"] = "generating_scenes"
-    threading.Thread(
-        target=_gerar_cenas_em_background,
-        args=(job_id,),
-        daemon=True,
-    ).start()
+    threading.Thread(target=_gerar_cenas_em_background, args=(job_id,), daemon=True).start()
     return {"message": "Roteiro aprovado. Gerando plano de cenas..."}
 
 
@@ -733,75 +958,32 @@ async def aprovar_roteiro(job_id: str, body: dict = {}):
 async def aprovar_cenas(job_id: str, body: dict = {}):
     """
     Etapa 6 → 7: usuário aprova (ou edita) as falas por cena.
-    Body opcional: { "scenes": [...] }
+    Body opcional: { "scenes": [...] }  — lista de disciplinas com cenas editadas
+    Após aprovação, envia para o HeyGen (uma chamada por disciplina).
     """
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "Job não encontrado.")
+        return JSONResponse(status_code=404, content={"error": "Job não encontrado."})
     if job["state"] != "awaiting_scenes_approval":
-        raise HTTPException(400, f"Estado inválido: {job['state']}")
+        return JSONResponse(status_code=400, content={"error": f"Estado inválido: {job['state']}"})
 
     if "scenes" in body:
         _jobs[job_id]["scenes"] = body["scenes"]
 
     _jobs[job_id]["state"] = "generating_video"
-    threading.Thread(
-        target=_gerar_video_em_background,
-        args=(job_id,),
-        daemon=True,
-    ).start()
+    threading.Thread(target=_gerar_video_em_background, args=(job_id,), daemon=True).start()
     return {"message": "Cenas aprovadas. Gerando vídeo no HeyGen..."}
 
+
+# ─── HeyGen status direto ────────────────────────────────────────────────────
 
 @app.get("/gerador-videos/heygen-status/{video_id}")
 def gerador_heygen_status(video_id: str):
     """Consulta status de um video_id direto no HeyGen v3."""
     heygen_token = os.getenv("HEYGEN_API_KEY")
     if not heygen_token:
-        raise HTTPException(500, "HEYGEN_API_KEY não configurado.")
+        return JSONResponse(status_code=500, content={"error": "HEYGEN_API_KEY não configurado."})
     try:
         return verificar_status_video(video_id, heygen_token)
     except Exception as e:
-        raise HTTPException(500, str(e))
-
-
-# ---------------------------------------------------------------------------
-# ── HEALTH CHECK ────────────────────────────────────────────────────────────
-# ---------------------------------------------------------------------------
-
-@app.get("/")
-async def health():
-    return {
-        "status":  "ok",
-        "service": "San Marino Booklet Creator API",
-        "version": "2.0.0",
-        "endpoints": [
-            "POST /upload",
-            "GET  /status",
-            "GET  /download/apostila",
-            "POST /approve",
-            "POST /reject",
-            "POST /approve/script",
-            "POST /reject/script",
-            "POST /redo",
-            "GET  /videos",
-            "GET  /download/video/{nome}",
-            "GET  /cursos",
-            "GET  /download/apostila/{nome_arquivo}",
-            "POST /gerador-videos/iniciar",
-            "GET  /gerador-videos/status/{job_id}",
-            "POST /gerador-videos/aprovar-markdown/{job_id}",
-            "POST /gerador-videos/aprovar-roteiro/{job_id}",
-            "POST /gerador-videos/aprovar-cenas/{job_id}",
-            "GET  /gerador-videos/heygen-status/{video_id}",
-        ],
-    }
-
-
-# ---------------------------------------------------------------------------
-# ── ENTRYPOINT ───────────────────────────────────────────────────────────────
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})

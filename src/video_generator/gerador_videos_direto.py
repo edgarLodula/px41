@@ -16,7 +16,6 @@ import time
 import uuid
 import requests
 import pdfplumber
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,23 +29,29 @@ LIMITE_PALAVRAS_MD  = None  # None = usa o markdown completo como contexto
 HEYGEN_BASE_URL       = "https://api.heygen.com"
 HEYGEN_ASPECT_RATIO   = "16:9"
 HEYGEN_ENGINE         = "avatar_iv"       # "avatar_iv" (padrão) | "avatar_v" (melhor qualidade)
-HEYGEN_SPEED          = 1.0               # 0.5–2.0
+HEYGEN_SPEED          = 1.0               # 0.5–2.0 — testar 0.9 se parecer acelerado
 HEYGEN_EXPRESSIVENESS = "medium"          # "low" | "medium" | "high"
 HEYGEN_MOTION_PROMPT  = "calm, professional, occasional hand gestures while teaching"
+# Background: prioridade → asset_id (HeyGen) > URL pública > cor sólida
+# Rodar scripts/upload_background_heygen.py uma vez para gerar HEYGEN_BG_ASSET_ID
+# FEATURE FUTURA: permitir o usuário fazer upload do próprio background na UI
+#   → frontend envia imagem para POST /gerador-videos/background
+#   → backend faz upload para POST /v3/assets do HeyGen
+#   → salva asset_id no job e usa no payload do vídeo
 HEYGEN_BG_ASSET_ID    = os.getenv("HEYGEN_BG_ASSET_ID", "")
-HEYGEN_BG_COLOR       = "#1a2744"         # fallback: azul escuro neutro
-OPENAI_MODEL          = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+HEYGEN_BG_COLOR       = "#1a2744"        # fallback: azul escuro neutro
+GEMINI_MODEL        = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Estados possíveis do job
 ESTADOS = [
-    "extracting",               # 1. Extraindo disciplina do PDF
-    "awaiting_md_approval",     # 2. ✅ Usuário revisa e aprova o Markdown
-    "generating_script",        # 3. OpenAI gera o roteiro
-    "awaiting_script_approval", # 4. ✅ Usuário revisa e aprova o roteiro
-    "generating_scenes",        # 5. Parseia o plano de cenas
-    "awaiting_scenes_approval", # 6. ✅ Usuário revisa e aprova as cenas
-    "generating_video",         # 7. HeyGen renderiza o vídeo
-    "completed",                # 8. ✅ Vídeo pronto
+    "extracting",              # 1. Extraindo disciplina do PDF
+    "awaiting_md_approval",    # 2. ✅ Usuário revisa e aprova o Markdown
+    "generating_script",       # 3. Gemini gera o roteiro
+    "awaiting_script_approval",# 4. ✅ Usuário revisa e aprova o roteiro
+    "generating_scenes",       # 5. Gemini gera o plano de cenas
+    "awaiting_scenes_approval",# 6. ✅ Usuário revisa e aprova as cenas
+    "generating_video",        # 7. HeyGen renderiza o vídeo
+    "completed",               # 8. ✅ Vídeo pronto
     "error",
 ]
 
@@ -78,12 +83,12 @@ def novo_job() -> dict:
 
 
 # =============================================================================
-# ETAPA 1 — EXTRAÇÃO DO PDF → MARKDOWN (via OpenAI)
+# ETAPA 1 — EXTRAÇÃO DO PDF → MARKDOWN (via Gemini)
 # =============================================================================
 
-def extrair_markdown_do_pdf(caminho_pdf: str, openai_token: str = None) -> dict:
+def extrair_markdown_do_pdf(caminho_pdf: str, gemini_token: str = None) -> dict:
     """
-    Extrai o texto bruto do PDF e usa a OpenAI para estruturar
+    Extrai o texto bruto do PDF e usa o Gemini para estruturar
     o conteúdo em Markdown por disciplina.
 
     Retorna dict com 'disciplina', 'ementa', 'markdown'.
@@ -93,12 +98,13 @@ def extrair_markdown_do_pdf(caminho_pdf: str, openai_token: str = None) -> dict:
     if not texto_bruto.strip():
         raise ValueError("Nenhum texto extraído do PDF. O arquivo pode ser uma imagem escaneada.")
 
-    token = openai_token or os.getenv("OPENAI_API_KEY")
+    token = gemini_token or os.getenv("GEMINI_API_KEY")
     if not token:
-        raise ValueError("OPENAI_API_KEY não configurada.")
+        raise ValueError("GEMINI_API_KEY não configurada.")
 
-    markdown = _openai_estruturar_pdf(texto_bruto, token)
+    markdown = _gemini_estruturar_pdf(texto_bruto, token)
 
+    # Extrai o nome da primeira disciplina do markdown para metadados
     disciplina = _extrair_nome_disciplina(markdown)
 
     return {
@@ -115,11 +121,12 @@ def _extrair_texto_pdf(caminho_pdf: str) -> str:
     return "\n\n".join(paginas)
 
 
-def _openai_estruturar_pdf(texto_bruto: str, token: str) -> str:
+def _gemini_estruturar_pdf(texto_bruto: str, token: str) -> str:
     """
-    Envia o texto bruto do PDF para a OpenAI e pede para estruturar
+    Envia o texto bruto do PDF para o Gemini e pede para estruturar
     em Markdown limpo com todas as disciplinas.
     """
+    # Limita o texto enviado para evitar exceder o contexto do Gemini
     contexto = texto_bruto[:12000]
 
     prompt = f"""Você é um especialista em organização de currículos educacionais.
@@ -141,7 +148,7 @@ TEXTO DO PDF:
 
 Markdown estruturado:"""
 
-    return _chamar_openai(prompt, token, max_tokens=4000)
+    return _chamar_gemini(prompt, token, max_tokens=4000)
 
 
 def _extrair_nome_disciplina(markdown: str) -> str:
@@ -153,11 +160,12 @@ def _extrair_nome_disciplina(markdown: str) -> str:
     return "Disciplina"
 
 
+
 # =============================================================================
 # ETAPA 2 — MARKDOWN APROVADO → ROTEIROS DE PRODUÇÃO (um por disciplina)
 # =============================================================================
 
-def gerar_roteiro(markdown: str, disciplina: str, openai_token: str) -> str:
+def gerar_roteiro(markdown: str, disciplina: str, gemini_token: str) -> str:
     """
     Recebe o Markdown completo aprovado e gera um roteiro de produção
     para CADA disciplina encontrada.
@@ -219,7 +227,7 @@ CURRÍCULO:
 
 Gere os roteiros de produção:"""
 
-    return _chamar_openai(prompt, openai_token, max_tokens=6000)
+    return _chamar_gemini(prompt, gemini_token, max_tokens=6000)
 
 
 def extrair_falas_do_roteiro(roteiro_ou_cenas) -> dict[str, str]:
@@ -228,6 +236,7 @@ def extrair_falas_do_roteiro(roteiro_ou_cenas) -> dict[str, str]:
     Aceita tanto o roteiro em texto (str) quanto a estrutura de cenas (list).
     Retorna dict { nome_disciplina: texto_fala_concatenado }
     """
+    # Se recebeu a estrutura de cenas (lista de dicts)
     if isinstance(roteiro_ou_cenas, list):
         resultado = {}
         for disc in roteiro_ou_cenas:
@@ -272,7 +281,7 @@ def _truncar_palavras(texto: str, n: int) -> str:
 def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
     """
     Parseia o roteiro aprovado e extrai a estrutura de cenas por disciplina.
-    Sem chamada à API — usa o que o usuário já aprovou.
+    Sem chamada ao Gemini — usa o que o usuário já aprovou.
 
     Retorna lista de dicts:
     [
@@ -325,19 +334,20 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
                 cenas_atuais.clear()
                 cena_atual = None
 
-        # Nova cena
+        # Nova cena — detecta padrões como [CENA 1 — Abertura] ou CENA 1 —
         elif ls.upper().startswith("[CENA ") or (ls.upper().startswith("CENA ") and "—" in ls):
             _salvar_cena()
             nome_cena = ls.strip("[]").split("—", 1)[-1].strip() if "—" in ls else ls
+            # remove timecode se presente ex: "(0:00 - 0:10)"
             nome_cena = re.sub(r'\([\d:]+\s*-\s*[\d:]+\)', '', nome_cena).strip()
             numero = len(cenas_atuais) + 1
             cena_atual = {
-                "numero":        numero,
-                "nome":          nome_cena,
-                "producao":      "",
-                "angulo":        "",
+                "numero":       numero,
+                "nome":         nome_cena,
+                "producao":     "",
+                "angulo":       "",
                 "texto_na_tela": "",
-                "fala":          "",
+                "fala":         "",
             }
 
         elif cena_atual is not None:
@@ -350,6 +360,7 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
             elif ls.startswith("[FALA]"):
                 cena_atual["fala"] = ls.replace("[FALA]", "").strip()
             elif cena_atual.get("fala") and not ls.startswith("["):
+                # continuação da fala em múltiplas linhas
                 cena_atual["fala"] += " " + ls
 
     _salvar_disciplina()
@@ -379,8 +390,8 @@ def gerar_video_heygen(
         raise ValueError("HEYGEN_VOICE_ID não configurado.")
 
     headers = {
-        "X-Api-Key":       heygen_token,
-        "Content-Type":    "application/json",
+        "X-Api-Key":      heygen_token,
+        "Content-Type":   "application/json",
         "Idempotency-Key": str(uuid.uuid4()),
     }
 
@@ -435,12 +446,15 @@ def verificar_status_video(video_id: str, heygen_token: str) -> dict:
         raise RuntimeError(f"GET /v3/videos/{video_id}: HTTP {resp.status_code}")
 
     data = resp.json().get("data", {})
+    # HeyGen v3 usa failure_message/failure_code para erros, não "error"
+    erro = data.get("failure_message") or data.get("error") or data.get("failure_code")
     return {
         "status":        data.get("status", "unknown"),
         "video_url":     data.get("video_url"),
         "thumbnail_url": data.get("thumbnail_url"),
         "duration":      data.get("duration"),
-        "error":         data.get("error"),
+        "error":         erro,
+        "failure_code":  data.get("failure_code"),
     }
 
 
@@ -458,28 +472,29 @@ def aguardar_video(video_id: str, heygen_token: str, max_min: int = 10) -> dict:
 
 
 # =============================================================================
-# UTILITÁRIO OPENAI
+# UTILITÁRIO GEMINI
 # =============================================================================
 
-def _chamar_openai(prompt: str, token: str, max_tokens: int = 4000) -> str:
-    client = OpenAI(api_key=token)
+def _chamar_gemini(prompt: str, token: str, max_tokens: int = 500) -> str:
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": max_tokens},
+    }
+    headers = {"Content-Type": "application/json"}
 
     for tentativa in range(3):
         try:
-            resp = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=max_tokens,
+            resp = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}"
+                f":generateContent?key={token}",
+                headers=headers,
+                json=payload,
+                timeout=30,
             )
-            return resp.choices[0].message.content.strip()
+            resp.raise_for_status()
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         except Exception as e:
-            erro = str(e)
-            if "401" in erro or "invalid_api_key" in erro.lower():
-                raise RuntimeError(f"OpenAI: chave inválida. Verifique OPENAI_API_KEY. Detalhe: {erro}")
             if tentativa < 2:
-                espera = 5 * (tentativa + 1)
-                print(f"⚠️ OpenAI tentativa {tentativa + 1}/3 falhou. Aguardando {espera}s...")
-                time.sleep(espera)
+                time.sleep(5 * (tentativa + 1))
             else:
-                raise RuntimeError(f"OpenAI falhou após 3 tentativas: {erro}")
+                raise RuntimeError(f"Gemini falhou após 3 tentativas: {e}")
