@@ -1,6 +1,9 @@
 import os
 import json
+import glob
 from dotenv import load_dotenv
+
+load_dotenv()
 
 # EXTRAÇÃO
 from src.pdf_csv.pdf_csv import extrair_pdf_para_csv
@@ -11,13 +14,12 @@ from src.content_generation.embedding_model import carregar_modelo, gerar_embedd
 from src.content_generation.faiss_index import criar_ou_carregar_index
 from src.content_generation.rag_pipeline import buscar_chunks
 from src.content_generation.generator import configurar_openai, gerar_documento
+from src.content_generation.area_profiles import get_profile
 
 # OUTPUT
 from src.output_formatter.markdown_generator import gerar_markdowns
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
-
-load_dotenv()
 
 # =========================
 # PATHS
@@ -41,11 +43,17 @@ CAMINHO_INDEX  = os.path.join(PASTA_INDEX, "faiss_index.bin")
 def main():
     heyGen_token = os.getenv("HEYGEN_API_KEY")
     openai_token = os.getenv("OPENAI_API_KEY")
-    """
+
+    # ------------------------------------------------------------------
+    # PERFIL DA ÁREA ATIVO
+    # ------------------------------------------------------------------
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    print(f"\nPerfil da área ativo: {profile['nome_area']} ({profile['nome_profissional']})")
+
     # ------------------------------------------------------------------
     # 1. DESCOBRE TODOS OS PDFs em data/input/
     # ------------------------------------------------------------------
-    
+    """
     pdfs = sorted([
         f for f in os.listdir(PASTA_PDFS)
         if f.lower().endswith(".pdf")
@@ -53,10 +61,10 @@ def main():
     ])
 
     if not pdfs:
-        print("❌ Nenhum PDF encontrado em data/input/. Adicione ao menos um PDF e tente novamente.")
+        print("Nenhum PDF encontrado em data/input/. Adicione ao menos um PDF e tente novamente.")
         return
 
-    print(f"\n📄 {len(pdfs)} PDF(s) encontrado(s):")
+    print(f"\n{len(pdfs)} PDF(s) encontrado(s):")
     for p in pdfs:
         print(f"   • {p}")
 
@@ -67,14 +75,14 @@ def main():
     # ------------------------------------------------------------------
     # 2. PARA CADA PDF: extrai CSV → converte para JSON → acumula base
     # ------------------------------------------------------------------
-    base_geral  = []
-    pdfs_ok     = []
+    base_geral = []
+    pdfs_ok    = []
 
     for nome_pdf in pdfs:
         caminho_pdf = os.path.join(PASTA_PDFS, nome_pdf)
 
         print(f"\n{'='*60}")
-        print(f"📄 Processando: {nome_pdf}")
+        print(f"Processando: {nome_pdf}")
         print(f"{'='*60}")
 
         # PDF → CSV
@@ -82,25 +90,25 @@ def main():
         caminho_csv = os.path.join(PASTA_CSV, nome_base + ".csv")
         extrair_pdf_para_csv(caminho_pdf, caminho_csv)
 
-        # CSV → JSON (por PDF) + acumula registros
+        # CSV → JSON + acumula registros
         registros = extrair_base_csv(caminho_pdf, PASTA_CSV, PASTA_JSON)
 
         if not registros:
-            print(f"   ⚠️  Nenhum registro extraído de {nome_pdf} — verifique se o PDF contém tabelas.")
+            print(f"   Nenhum registro extraído de {nome_pdf} — verifique se o PDF contém tabelas.")
             continue
 
         base_geral.extend(registros)
         pdfs_ok.append(nome_pdf)
 
         n_disc = len(set(r["disciplina"] for r in registros))
-        print(f"   ✅ {n_disc} disciplina(s) | {len(registros)} tópico(s) extraídos")
+        print(f"   {n_disc} disciplina(s) | {len(registros)} tópico(s) extraídos")
 
     if not base_geral:
-        print("\n❌ Base vazia após processar todos os PDFs. Encerrando.")
+        print("\nBase vazia após processar todos os PDFs. Encerrando.")
         return
 
     # ------------------------------------------------------------------
-    # 3. SALVA base_geral.json CONSOLIDADA (todos os cursos / PDFs)
+    # 3. SALVA base_geral.json CONSOLIDADA
     # ------------------------------------------------------------------
     with open(CAMINHO_JSON, "w", encoding="utf-8") as f:
         json.dump(base_geral, f, ensure_ascii=False, indent=2)
@@ -108,19 +116,19 @@ def main():
     cursos_unicos = sorted(set(
         r.get("curso") or r.get("arquivo", "?") for r in base_geral
     ))
-    print(f"\n✅ base_geral.json salvo:")
+    print(f"\nbase_geral.json salvo:")
     print(f"   • {len(base_geral)} tópicos totais")
     print(f"   • {len(cursos_unicos)} curso(s): {cursos_unicos}")
 
     # ------------------------------------------------------------------
     # 4. EMBEDDINGS
     # ------------------------------------------------------------------
-    print("\n🔢 Gerando embeddings...")
+    print("\nGerando embeddings...")
     model      = carregar_modelo()
     embeddings = gerar_embeddings(model, base_geral)
 
     # ------------------------------------------------------------------
-    # 5. FAISS — reconstrói para garantir sincronia com a base atual
+    # 5. FAISS
     # ------------------------------------------------------------------
     index = criar_ou_carregar_index(
         CAMINHO_INDEX,
@@ -131,40 +139,43 @@ def main():
     # ------------------------------------------------------------------
     # 6. LLM
     # ------------------------------------------------------------------
-    gemini = configurar_openai()
+    client = configurar_openai()
 
     # ------------------------------------------------------------------
-    # 7. MARKDOWN — um .md por disciplina, uma pasta por curso
+    # 7. MARKDOWN — um .md por disciplina (aluno + professor)
     # ------------------------------------------------------------------
-    print("\n📝 Gerando markdowns...")
+    print("\nGerando markdowns...")
     gerar_markdowns(
         base_geral=base_geral,
         buscar_chunks=buscar_chunks,
         gerar_documento=gerar_documento,
         model=model,
         index=index,
-        gemini=gemini,
+        gemini=client,
         pasta_saida=PASTA_MARKDOWN,
     )
-    
+
     # ------------------------------------------------------------------
-    # 8. PDF — uma apostila por curso
+    # 8. PDF — um por disciplina: workbooks_pdf/{aluno|professor}/{curso}/{disciplina}.pdf
     # ------------------------------------------------------------------
-    print("\n📚 Gerando apostilas PDF...")
+    print("\nGerando apostilas PDF...")
     gerar_apostilas_por_curso(
         pasta_markdown=PASTA_MARKDOWN,
         pasta_pdf=PASTA_PDF,
         logo_path=LOGO_PATH,
     )
-    """
+
+    n_aluno = len(glob.glob(os.path.join(PASTA_PDF, "aluno", "*", "*.pdf")))
+    n_prof  = len(glob.glob(os.path.join(PASTA_PDF, "professor", "*", "*.pdf")))
+"""
     # ------------------------------------------------------------------
-    # 9. VÍDEOS — um vídeo por disciplina (requer HEYGEN_API_KEY)
+    # 9. VÍDEOS (requer HEYGEN_API_KEY)
     # ------------------------------------------------------------------
     if not heyGen_token:
-        print("\n⚠️  HEYGEN_API_KEY não encontrada. Pulando geração de vídeos.")
+        print("\nHEYGEN_API_KEY não encontrada. Pulando geração de vídeos.")
     else:
         try:
-            print("\n🎬 Gerando vídeos...")
+            print("\nGerando vídeos...")
             gerar_videos_por_disciplina(
                 pasta_markdown=PASTA_MARKDOWN,
                 pasta_saida=PASTA_VIDEO,
@@ -172,20 +183,21 @@ def main():
                 heyGen_token=heyGen_token,
             )
         except Exception as e:
-            print(f"❌ Erro na geração de vídeos: {e}")
+            print(f"Erro na geração de vídeos: {e}")
 
     # ------------------------------------------------------------------
     # RESUMO FINAL
     # ------------------------------------------------------------------
     print(f"\n{'='*60}")
-    print(f"🎯 Pipeline finalizado!")
-    print(f"   • {len(pdfs_ok)} PDF(s) processado(s): {pdfs_ok}")
-    print(f"   • {len(cursos_unicos)} curso(s) gerado(s)")
-    print(f"   • Markdowns  → {PASTA_MARKDOWN}")
-    print(f"   • Apostilas  → {PASTA_PDF}")
+    print(f"Pipeline finalizado!")
+    print(f"   • Perfil ativo : {profile['nome_area']} ({profile['nome_profissional']})")
+    print(f"   • PDFs gerados : {n_aluno} (aluno) + {n_prof} (professor) = {n_aluno + n_prof}")
+    print(f"   • Markdowns    : {PASTA_MARKDOWN}")
+    print(f"   • Apostilas    : {PASTA_PDF}/{{aluno|professor}}/<curso>/<disciplina>.pdf")
     if heyGen_token:
-        print(f"   • Vídeos     → {PASTA_VIDEO}")
+        print(f"   • Videos       : {PASTA_VIDEO}")
     print(f"{'='*60}\n")
+
 
 # =========================
 # ENTRYPOINT

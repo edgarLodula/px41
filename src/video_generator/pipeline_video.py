@@ -1,12 +1,39 @@
 import os
+import re
 
-from src.video_generator.roteiro_generator import gerar_roteiro
-from src.video_generator.video_generator import gerar_video
+import requests
+
+from src.video_generator.gerador_videos_direto import (
+    aguardar_video,
+    extrair_falas_do_roteiro,
+    gerar_roteiro,
+    gerar_video_heygen,
+    parsear_cenas_do_roteiro,
+)
+
+
+def _slug(nome: str) -> str:
+    slug = re.sub(r"[^\w.-]+", "_", nome.strip(), flags=re.UNICODE)
+    return slug.strip("_") or "disciplina"
+
+
+def _baixar_video(video_url: str, caminho_saida: str):
+    resp = requests.get(video_url, timeout=60)
+    resp.raise_for_status()
+    with open(caminho_saida, "wb") as f:
+        f.write(resp.content)
 
 
 def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGen_token):
+    """
+    Gera videos por disciplina a partir dos markdowns ja produzidos pela pipeline.
+
+    Fluxo: markdown -> roteiro -> cenas -> falas -> HeyGen v3 -> download mp4
+    """
+    if not openai_token:
+        raise ValueError("OPENAI_API_KEY nao configurada.")
     if not heyGen_token:
-        raise ValueError("❌ heyGen_token não encontrado. Configure no .env ou sistema.")
+        raise ValueError("HEYGEN_API_KEY nao configurada.")
 
     os.makedirs(pasta_saida, exist_ok=True)
 
@@ -16,9 +43,8 @@ def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGe
         if not os.path.isdir(caminho_curso):
             continue
 
-        print(f"\n📚 Curso: {curso}")
+        print(f"\nCurso: {curso}")
 
-        # pasta do curso
         pasta_curso_video = os.path.join(pasta_saida, curso)
         os.makedirs(pasta_curso_video, exist_ok=True)
 
@@ -26,35 +52,47 @@ def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGe
             if not arquivo.endswith(".md"):
                 continue
 
-            disciplina = arquivo.replace(".md", "")
+            disciplina = arquivo.replace(".md", "").replace("_", " ")
             caminho_md = os.path.join(caminho_curso, arquivo)
 
-            print(f"🎬 Gerando: {disciplina}")
+            print(f"Gerando video: {disciplina}")
 
             try:
-                # pasta da disciplina
-                pasta_disciplina = os.path.join(pasta_curso_video, disciplina)
-                pasta_roteiro = os.path.join(pasta_disciplina, "roteiro")
+                pasta_disciplina = os.path.join(pasta_curso_video, _slug(disciplina))
                 os.makedirs(pasta_disciplina, exist_ok=True)
-                os.makedirs(pasta_roteiro, exist_ok=True)
 
                 caminho_video = os.path.join(pasta_disciplina, "video.mp4")
-                caminho_roteiro = os.path.join(pasta_roteiro, f"{disciplina}.txt")
 
                 with open(caminho_md, "r", encoding="utf-8") as f:
-                    texto = f.read()
+                    markdown = f.read()
 
-                # 1. Roteiro
-                roteiro = gerar_roteiro(texto, disciplina, openai_token)
+                roteiro = gerar_roteiro(markdown, disciplina, openai_token)
+                cenas = parsear_cenas_do_roteiro(roteiro)
+                falas = extrair_falas_do_roteiro(cenas)
 
-                with open(caminho_roteiro, "w", encoding="utf-8") as f:
-                    f.write(roteiro)
-                print(f"   📄 Roteiro salvo em: {caminho_roteiro}")
+                fala = falas.get(disciplina)
+                if not fala and falas:
+                    fala = next(iter(falas.values()))
+                if not fala:
+                    fala = " ".join(
+                        cena.get("fala", "")
+                        for grupo in cenas
+                        for cena in grupo.get("cenas", [])
+                        if cena.get("fala")
+                    ).strip()
+                if not fala:
+                    raise ValueError("Nenhuma fala encontrada no roteiro gerado.")
 
-                # 2. Vídeo
-                gerar_video(roteiro, caminho_video)
+                video_id = gerar_video_heygen(fala, disciplina, heyGen_token)
+                info = aguardar_video(video_id, heyGen_token)
 
-                print(f"   ✅ Finalizado: {disciplina}")
+                video_url = info.get("video_url")
+                if not video_url:
+                    raise RuntimeError(f"HeyGen concluiu sem video_url: {info}")
+
+                _baixar_video(video_url, caminho_video)
+
+                print(f"   Finalizado: {caminho_video}")
 
             except Exception as e:
-                print(f"   ❌ Erro em {disciplina}: {e}")
+                print(f"   Erro em {disciplina}: {e}")

@@ -1,5 +1,7 @@
 import os
 import re
+import shutil
+import tempfile
 import markdown
 import base64
 import pdfkit
@@ -125,8 +127,10 @@ def _pos_processar_html(html: str) -> str:
 # TEMPLATE HTML COMPLETO
 # ---------------------------------------------------------------------------
 
-def gerar_html_completo(conteudos_html, nome_curso, logo_base64):
+def gerar_html_completo(conteudos_html, nome_curso, logo_base64, nome_disciplina=None, subtitulo_capa=None):
     nome_curso_display = nome_curso.replace("_", " ")
+    nome_disciplina_display = nome_disciplina.replace("_", " ") if nome_disciplina else nome_curso_display
+    subtitulo_display = subtitulo_capa or f"Material Didático — {nome_curso_display}"
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -158,7 +162,6 @@ def gerar_html_completo(conteudos_html, nome_curso, logo_base64):
             padding-bottom: 8px;
             margin-top: 0;
             margin-bottom: 6px;
-            page-break-before: always;
         }}
 
         /* Seções principais: Introdução, Objetivos, Tópicos, Resumo… */
@@ -464,6 +467,10 @@ def gerar_html_completo(conteudos_html, nome_curso, logo_base64):
             page-break-after: always;
         }}
 
+        .nova-disciplina {{
+            page-break-before: always;
+        }}
+
     </style>
 </head>
 <body>
@@ -472,8 +479,8 @@ def gerar_html_completo(conteudos_html, nome_curso, logo_base64):
     <div class="capa">
         <img src="data:image/jpeg;base64,{logo_base64}" width="130"><br><br>
         <h1>ESCOLA TÉCNICA SAN MARINO</h1>
-        <h2>{nome_curso_display}</h2>
-        <p class="subtitulo">Material Didático — Apostila Técnica Completa</p>
+        <h2>{nome_disciplina_display}</h2>
+        <p class="subtitulo">{subtitulo_display}</p>
     </div>
 
     <!-- CONTEÚDO -->
@@ -495,33 +502,67 @@ def _md_para_html(md_texto: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# GERAÇÃO DAS APOSTILAS
+# GERAÇÃO DE UM PDF A PARTIR DE UM ÚNICO .md
 # ---------------------------------------------------------------------------
 
-def gerar_apostilas_por_curso(
+def _gerar_pdf_disciplina(md_path, pdf_path, nome_curso_display, disciplina, caderno, logo_base64):
+    try:
+        with open(md_path, "r", encoding="utf-8") as f:
+            md_texto = f.read()
+    except Exception as e:
+        print(f"   ⚠️  Erro ao ler {md_path}: {e}")
+        return
+
+    html_disciplina = _md_para_html(md_texto)
+    subtitulo = "Caderno do Professor" if caderno == "professor" else "Caderno do Aluno"
+    html_final = gerar_html_completo(
+        conteudos_html=html_disciplina,
+        nome_curso=nome_curso_display,
+        logo_base64=logo_base64,
+        nome_disciplina=disciplina.replace("_", " "),
+        subtitulo_capa=subtitulo,
+    )
+
+    try:
+        pdf_path = os.path.abspath(pdf_path)
+        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp_path = tmp.name
+        pdfkit.from_string(
+            html_final,
+            tmp_path,
+            configuration=_get_pdfkit_config(),
+            options=WKHTMLTOPDF_OPTIONS,
+        )
+        shutil.move(tmp_path, pdf_path)
+        print(f"   ✅ {caderno}/{disciplina}.pdf")
+    except Exception as exc:
+        print(f"   ❌ Erro ao gerar PDF ({disciplina}): {exc}")
+
+
+# ---------------------------------------------------------------------------
+# GERAÇÃO DAS APOSTILAS — 1 PDF por disciplina
+# ---------------------------------------------------------------------------
+
+def gerar_apostilas_por_disciplina(
     pasta_markdown="data/output/markdown",
     pasta_pdf="data/output/workbooks_pdf",
-    logo_path="assets/logo.jpeg"
+    logo_path="assets/logo.jpeg",
 ):
-    os.makedirs(pasta_pdf, exist_ok=True)
-
+    """Gera um PDF por .md: workbooks_pdf/{aluno|professor}/{curso}/{disciplina}.pdf"""
     try:
         with open(logo_path, "rb") as img:
             logo_base64 = base64.b64encode(img.read()).decode()
     except FileNotFoundError:
-        print(f"⚠️  Logo não encontrado em '{logo_path}'. A capa será gerada sem imagem.")
-        # 1x1 pixel PNG transparente como placeholder
+        print(f"⚠️  Logo não encontrado em '{logo_path}'. Capa sem imagem.")
         logo_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
-    cursos = os.listdir(pasta_markdown)
-
-    for curso in cursos:
+    total = 0
+    for curso in sorted(os.listdir(pasta_markdown)):
         caminho_curso = os.path.join(pasta_markdown, curso)
-
         if not os.path.isdir(caminho_curso):
             continue
 
-        # Lê título real do curso (salvo pelo markdown_generator); fallback = nome da pasta
         titulo_txt = os.path.join(caminho_curso, "_titulo.txt")
         if os.path.exists(titulo_txt):
             with open(titulo_txt, "r", encoding="utf-8") as _f:
@@ -529,39 +570,33 @@ def gerar_apostilas_por_curso(
         else:
             nome_curso_display = curso
 
-        print(f"\n📚 Gerando apostila: {nome_curso_display}")
+        print(f"\n📚 Curso: {nome_curso_display}")
 
-        conteudos_html = ""
-        arquivos_md = sorted(os.listdir(caminho_curso))
+        mds = sorted(f for f in os.listdir(caminho_curso) if f.endswith(".md") and not f.startswith("_"))
 
-        for arquivo in arquivos_md:
-            if not arquivo.endswith(".md") or arquivo.startswith("_"):
-                continue
+        for md_file in mds:
+            eh_professor = md_file.endswith("_Professor.md")
+            caderno = "professor" if eh_professor else "aluno"
+            disciplina = md_file[:-len("_Professor.md")] if eh_professor else md_file[:-3]
 
-            caminho_md = os.path.join(caminho_curso, arquivo)
+            pdf_path = os.path.join(pasta_pdf, caderno, curso, f"{disciplina}.pdf")
+            _gerar_pdf_disciplina(
+                md_path=os.path.join(caminho_curso, md_file),
+                pdf_path=pdf_path,
+                nome_curso_display=nome_curso_display,
+                disciplina=disciplina,
+                caderno=caderno,
+                logo_base64=logo_base64,
+            )
+            total += 1
 
-            with open(caminho_md, "r", encoding="utf-8") as f:
-                md_texto = f.read()
+    print(f"\n✅ Total de PDFs gerados: {total}")
 
-            disciplina = arquivo.replace(".md", "").replace("_", " ")
-            html = _md_para_html(md_texto)
 
-            conteudos_html += f"""
-                <h1 class="titulo-disciplina">{disciplina}</h1>
-                {html}
-                <div class="page-break"></div>
-            """
-
-        html_final = gerar_html_completo(conteudos_html, nome_curso_display, logo_base64)
-
-        nome_pdf = curso.replace(" ", "_") + ".pdf"
-        caminho_pdf = os.path.join(pasta_pdf, nome_pdf)
-
-        pdfkit.from_string(
-            html_final,
-            caminho_pdf,
-            configuration=_get_pdfkit_config(),
-            options=WKHTMLTOPDF_OPTIONS
-        )
-
-        print(f"   ✅ PDF gerado: {caminho_pdf}")
+# wrapper para compatibilidade com chamadas existentes em main.py
+def gerar_apostilas_por_curso(
+    pasta_markdown="data/output/markdown",
+    pasta_pdf="data/output/workbooks_pdf",
+    logo_path="assets/logo.jpeg",
+):
+    gerar_apostilas_por_disciplina(pasta_markdown, pasta_pdf, logo_path)

@@ -2,27 +2,33 @@ import os
 import time
 from openai import OpenAI
 
+from src.content_generation.area_profiles import get_profile
 
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+OPENAI_MODEL  = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+# Define a área de formação: "industrial", "saude", "enfermagem", etc.
+# Altere no .env: AREA_FORMACAO=saude
+AREA_FORMACAO = os.getenv("AREA_FORMACAO", "industrial")
 
 
 def configurar_openai():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise Exception("❌ OPENAI_API_KEY não encontrada no .env.")
+        raise Exception("OPENAI_API_KEY não encontrada no .env.")
     client = OpenAI(api_key=api_key)
-    print(f"✅ OpenAI configurado (modelo: {OPENAI_MODEL})")
+    area = os.getenv("AREA_FORMACAO", "industrial")
+    print(f"OpenAI configurado (modelo: {OPENAI_MODEL}, area: {area})")
     return client
 
 
 def _tratar_erro_openai(erro: str, tentativa: int, max_tentativas: int):
     if "401" in erro or "authentication" in erro.lower() or "invalid_api_key" in erro.lower():
         raise Exception(
-            f"❌ Chave OpenAI inválida ou sem permissão. Verifique OPENAI_API_KEY. Detalhe: {erro}"
+            f"Chave OpenAI inválida ou sem permissão. Verifique OPENAI_API_KEY. Detalhe: {erro}"
         )
     elif "429" in erro or "503" in erro or "500" in erro:
         espera = (2 ** tentativa) * 15
-        print(f"⚠️ Rate limit/serviço indisponível. Aguardando {espera}s... (tentativa {tentativa + 1}/{max_tentativas})")
+        print(f"Rate limit/serviço indisponível. Aguardando {espera}s... (tentativa {tentativa + 1}/{max_tentativas})")
         time.sleep(espera)
     else:
         raise
@@ -34,13 +40,79 @@ def _chamar_api(client, prompt: str, max_tokens: int = 16000) -> str:
             resposta = client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
+                temperature=0.1,
                 max_tokens=max_tokens,
             )
             return resposta.choices[0].message.content
         except Exception as e:
             _tratar_erro_openai(str(e), tentativa, 4)
-    raise Exception("❌ Falha após 4 tentativas.")
+    raise Exception("Falha após 4 tentativas.")
+
+
+# =============================================================================
+# HELPERS DE CONTEXTO E REGRAS
+# =============================================================================
+
+def _bloco_contexto_area(profile: dict) -> str:
+    lei = profile.get("lei_exercicio") or "não aplicável"
+    return f"""ÁREA DE FORMAÇÃO: {profile['nome_area']}
+NOME DO PROFISSIONAL FORMADO: {profile['nome_profissional']}
+AMBIENTES DE TRABALHO TÍPICOS: {', '.join(profile['ambientes_de_trabalho'])}
+EQUIPAMENTOS / MATERIAIS TÍPICOS: {', '.join(profile['equipamentos_tipicos'])}
+NORMAS REGULAMENTADORAS APLICÁVEIS: {', '.join(profile['normas_regulamentadoras'])}
+NORMAS TÉCNICAS APLICÁVEIS: {', '.join(profile['normas_tecnicas'])}
+CONSELHO DE CLASSE: {profile['conselho_classe']}
+LEI DE EXERCÍCIO PROFISSIONAL: {lei}
+GRANDEZAS / PARÂMETROS TÍPICOS: {profile['grandezas_tipicas']}
+EPIs / PROTEÇÕES TÍPICAS: {profile['epis_tipicos']}
+PROCEDIMENTOS DE SEGURANÇA CHAVE: {profile['procedimentos_seguranca_chave']}
+TECNOLOGIAS EMERGENTES: {profile['tecnologias_emergentes']}
+SOFTWARES / SISTEMAS TÍPICOS: {profile['softwares_tipicos']}"""
+
+
+def _bloco_regras(profile: dict) -> str:
+    lei = profile.get("lei_exercicio") or "não aplicável"
+    ambientes = ", ".join(profile["ambientes_de_trabalho"][:4])
+
+    proibido_lista = ""
+    if profile.get("vocabulario_proibido"):
+        itens = "\n".join(f"{i+1}. {t}" for i, t in enumerate(profile["vocabulario_proibido"]))
+        proibido_lista = f"VOCABULÁRIO PROIBIDO — NÃO use em hipótese alguma, em nenhuma seção, nem como exemplo, nem entre parênteses:\n{itens}"
+
+    regras_lista = ""
+    if profile.get("regras_terminologia_obrigatorias"):
+        itens = "\n".join(f"{i+1}. {r}" for i, r in enumerate(profile["regras_terminologia_obrigatorias"]))
+        regras_lista = f"TERMINOLOGIA OBRIGATÓRIA — Aplique sem exceção:\n{itens}"
+
+    refs_lista = ""
+    if profile.get("referencias_oficiais_obrigatorias"):
+        itens = "\n".join(f"{i+1}. {r}" for i, r in enumerate(profile["referencias_oficiais_obrigatorias"]))
+        refs_lista = f"REFERÊNCIAS OFICIAIS QUE DEVEM SER CITADAS quando o tópico permitir:\n{itens}"
+
+    proibido_inline = ", ".join(profile.get("vocabulario_proibido", []))
+
+    return f"""======================================================
+RESTRIÇÕES INVIOLÁVEIS DESTE DOCUMENTO
+======================================================
+
+Se você violar qualquer item desta lista, o documento é REJEITADO automaticamente.
+
+{proibido_lista}
+
+{regras_lista}
+
+{refs_lista}
+
+A área desta apostila é {profile['nome_area']}.
+O profissional formado é {profile['nome_profissional']}.
+Os ambientes de trabalho típicos são: {ambientes}.
+O conselho de classe é {profile['conselho_classe']}.
+A lei de exercício profissional é {lei}.
+
+NUNCA mencione nada da lista de vocabulário proibido acima: {proibido_inline}.
+Esta é uma apostila de {profile['nome_area']}, NÃO de engenharia industrial.
+
+======================================================"""
 
 
 # =============================================================================
@@ -48,41 +120,58 @@ def _chamar_api(client, prompt: str, max_tokens: int = 16000) -> str:
 # =============================================================================
 
 def _gerar_introducao(client, disciplina: str, ementa: str, contexto: str) -> str:
-    prompt = f"""Você é uma IA especialista sênior em geração de apostilas técnicas profissionalizantes para cursos técnicos completos.
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    ambientes_lista = "\n".join(f"- {a}" for a in profile["ambientes_de_trabalho"])
+    normas_reg = ", ".join(profile["normas_regulamentadoras"])
+    normas_tec = ", ".join(profile["normas_tecnicas"])
+
+    prompt = f"""Você é uma IA especialista sênior em geração de apostilas técnicas profissionalizantes para cursos técnicos da área de {profile['nome_area']}.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 EMENTA: {ementa}
 CONTEXTO COMPLEMENTAR: {contexto}
 
-Gere a INTRODUÇÃO COMPLETA E EXPANDIDA da disciplina {disciplina} para uma apostila técnica profissional de curso técnico.
+Gere a INTRODUÇÃO COMPLETA E EXPANDIDA da disciplina {disciplina} para uma apostila técnica profissional de curso técnico {profile['nome_area']}.
 
 REGRAS OBRIGATÓRIAS:
 - O conteúdo deve ter entre 2.500 e 3.500 palavras (equivalente a 5 a 7 páginas de apostila A4).
-- Use Markdown estruturado: títulos (##, ###), subtítulos, tabelas quando úteis, destaques em negrito para conceitos-chave.
+- Use Markdown estruturado: títulos (##, ###), subtítulos, tabelas quando úteis, negrito para conceitos-chave.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
 - Nunca compacte seções. Desenvolva cada bloco com profundidade real.
+- Use segmentação visual: divida o texto em microseções com subtítulos claros; evite blocos corridos de mais de 4 parágrafos sem um subtítulo ou elemento visual (tabela, quadro ou lista comentada).
+- Onde pertinente, insira marcadores de figura no formato **[FIGURA: descrição detalhada do diagrama ou imagem sugerida]** para indicar onde imagens devem ser inseridas na apostila impressa.
 
 Use exatamente esta estrutura:
 
 ## Apresentação da Disciplina
 
-Contextualize amplamente a disciplina {disciplina} dentro do curso técnico e da formação profissional. Explique o papel central desta disciplina na construção do perfil do técnico. Mínimo de 400 palavras.
+Contextualize amplamente a disciplina {disciplina} dentro do curso técnico de {profile['nome_area']} e da formação profissional. Explique o papel central desta disciplina na construção do perfil do {profile['nome_profissional']}. Mínimo de 400 palavras.
 
 ## Origem e Evolução Histórica
 
-Trace a história da {disciplina} desde suas origens até o estado atual do conhecimento. Cite marcos científicos, pesquisadores e eventos que moldaram a disciplina. Explique como as práticas evoluíram e o que mudou no paradigma atual. Mínimo de 600 palavras.
+Trace a história da {disciplina} desde suas origens até o estado atual do conhecimento técnico-profissional. Cite marcos, pesquisadores, normas e eventos que moldaram a disciplina. Explique como as práticas na área de {profile['nome_area']} evoluíram e o que mudou no paradigma atual. Mínimo de 600 palavras.
 
 ## Relevância para a Prática Profissional
 
-Explique com profundidade por que esta disciplina é fundamental para o técnico em saúde. Mostre o impacto direto no cuidado ao paciente, quais problemas profissionais ela permite resolver e por que um profissional sem esse conhecimento estaria incompleto. Mínimo de 500 palavras.
+Explique com profundidade por que esta disciplina é fundamental para o {profile['nome_profissional']}. Mostre o impacto direto na atuação em ambientes como: {', '.join(profile['ambientes_de_trabalho'][:4])}. Quais problemas profissionais ela permite resolver e por que um profissional sem esse conhecimento estaria incompleto para atuar no mercado. Mínimo de 500 palavras.
 
 ## Integração Curricular e Interdisciplinaridade
 
-Mostre como {disciplina} se conecta com as demais disciplinas do curso técnico. Identifique conhecimentos prerequisitos, disciplinas que dependem desta e como ela forma uma rede integrada de saberes. Mínimo de 400 palavras.
+Mostre como {disciplina} se conecta com as demais disciplinas do curso técnico de {profile['nome_area']}. Identifique conhecimentos pré-requisitos, disciplinas que dependem desta e como ela forma uma rede integrada de saberes técnicos. Mínimo de 400 palavras.
 
-## O Curso Técnico, o SUS e o Contexto Brasileiro
+## O Curso Técnico e o Mercado de Trabalho
 
-Situe {disciplina} no contexto do Sistema Único de Saúde, dos hospitais, UBSs e demais serviços de saúde no Brasil. Explique como as políticas públicas, os protocolos do Ministério da Saúde e as realidades locais influenciam a prática desta disciplina. Mínimo de 400 palavras.
+Situe {disciplina} no contexto do setor de {profile['nome_area']}, abordando os principais ambientes de atuação:
+{ambientes_lista}
+
+Explique como normas regulamentadoras ({normas_reg}), normas técnicas ({normas_tec}), exigências do {profile['conselho_classe']} e as demandas do mercado influenciam a prática desta disciplina. Mínimo de 400 palavras.
 
 ## Guia de Estudo e Uso desta Apostila
 
@@ -92,36 +181,45 @@ Descreva o percurso de aprendizagem ao longo da disciplina, as competências que
 
 
 def _gerar_objetivos(client, disciplina: str, ementa: str, contexto: str) -> str:
-    prompt = f"""Você é uma IA especialista sênior em engenharia pedagógica e currículo para cursos técnicos profissionalizantes.
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    prompt = f"""Você é uma IA especialista sênior em engenharia pedagógica e currículo para cursos técnicos profissionalizantes da área de {profile['nome_area']}.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 EMENTA: {ementa}
 CONTEXTO COMPLEMENTAR: {contexto}
 
-Gere os OBJETIVOS DE APRENDIZAGEM COMPLETOS E DETALHADOS da disciplina {disciplina} para uma apostila técnica profissional.
+Gere os OBJETIVOS DE APRENDIZAGEM COMPLETOS E DETALHADOS da disciplina {disciplina} para uma apostila técnica profissional de curso técnico de {profile['nome_area']}.
 
 REGRAS OBRIGATÓRIAS:
 - O conteúdo deve ter entre 2.000 e 3.000 palavras (equivalente a 4 a 6 páginas de apostila A4).
 - Use Markdown estruturado: títulos (##, ###), tabelas de competências quando útil, negrito para objetivos centrais.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
+- Use segmentação visual: evite blocos corridos; insira subtítulos, quadros ou tabelas para organizar o conteúdo.
 
 Use exatamente esta estrutura:
 
 ## Objetivos Gerais da Disciplina
 
-Apresente 5 objetivos gerais. Para cada objetivo, escreva um parágrafo completo explicando: o que o aluno deverá ser capaz de fazer ao final, por que este objetivo é importante, como ele se manifesta na prática profissional e qual o nível de profundidade esperado. Mínimo de 500 palavras.
+Apresente 5 objetivos gerais. Para cada objetivo, escreva um parágrafo completo explicando: o que o aluno deverá ser capaz de fazer ao final, por que este objetivo é importante para a atuação do {profile['nome_profissional']}, como ele se manifesta na prática profissional e qual o nível de profundidade esperado. Mínimo de 500 palavras.
 
 ## Competências Técnicas a Desenvolver
 
-Apresente 8 competências técnicas práticas específicas. Para cada competência: explique o que o técnico deverá executar, em quais condições, com qual nível de precisão e autonomia, e quais consequências um erro teria no ambiente clínico. Mínimo de 600 palavras.
+Apresente 8 competências técnicas práticas específicas para o {profile['nome_profissional']}. Para cada competência: explique o que o profissional deverá executar, em quais condições e ambientes de trabalho ({', '.join(profile['ambientes_de_trabalho'][:4])}), com qual nível de precisão e autonomia, e quais consequências um erro teria no ambiente de trabalho (segurança, qualidade do atendimento/serviço, danos a equipamentos). Mínimo de 600 palavras.
 
-## Competências Cognitivas e de Raciocínio Clínico
+## Competências Cognitivas e de Raciocínio Técnico
 
-Apresente 5 competências relacionadas à análise, raciocínio clínico, tomada de decisão e resolução de problemas. Explique como cada habilidade cognitiva se traduz em ações concretas no cotidiano de trabalho. Mínimo de 400 palavras.
+Apresente 5 competências relacionadas à análise técnica, raciocínio lógico, diagnóstico de situações, tomada de decisão e resolução de problemas no contexto de {profile['nome_area']}. Explique como cada habilidade cognitiva se traduz em ações concretas no cotidiano do {profile['nome_profissional']}. Mínimo de 400 palavras.
 
 ## Competências Atitudinais e Éticas
 
-Apresente 4 competências relacionadas a atitudes profissionais, postura ética, comunicação com pacientes e equipe, humanização e responsabilidade. Explique por que cada atitude é inegociável na profissão. Mínimo de 300 palavras.
+Apresente 4 competências relacionadas a atitudes profissionais, postura ética, comunicação com colegas e supervisores, responsabilidade com segurança e conservação do patrimônio. Explique por que cada atitude é inegociável no contexto de {profile['nome_area']}. Mínimo de 300 palavras.
 
 ## Perfil do Aluno ao Concluir a Disciplina
 
@@ -131,38 +229,58 @@ Descreva o perfil completo do aluno ao concluir a disciplina: o que ele saberá,
 
 
 def _gerar_exemplos(client, disciplina: str, ementa: str, contexto: str) -> str:
-    prompt = f"""Você é uma IA especialista sênior em produção de material didático para cursos técnicos em saúde, com experiência em casos clínicos e situações práticas profissionais.
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    ambientes = profile["ambientes_de_trabalho"]
+    equip = ", ".join(profile["equipamentos_tipicos"][:8])
+    # Garante 5 casos com ambientes do perfil
+    casos = ambientes[:5] if len(ambientes) >= 5 else ambientes + ["ambiente de trabalho profissional"] * (5 - len(ambientes))
+
+    prompt = f"""Você é uma IA especialista sênior em produção de material didático para cursos técnicos de {profile['nome_area']}, com experiência em estudos de caso profissionais e situações práticas reais.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 EMENTA: {ementa}
 CONTEXTO COMPLEMENTAR: {contexto}
 
-Gere 5 CASOS CLÍNICOS PRÁTICOS COMENTADOS completos e detalhados relacionados à disciplina {disciplina}.
+Gere 5 ESTUDOS DE CASO PRÁTICOS COMENTADOS completos e detalhados relacionados à disciplina {disciplina} para o contexto de {profile['nome_area']}.
 
 REGRAS OBRIGATÓRIAS:
 - O conteúdo total deve ter entre 4.000 e 5.500 palavras (equivalente a 8 a 11 páginas de apostila A4).
 - Use Markdown estruturado: títulos de caso (###), subtítulos internos, negrito para pontos críticos, quadros de atenção em negrito.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
 - Cada caso deve ter no mínimo 700 palavras e ser completo e autoexplicativo.
+- Onde pertinente, insira marcadores **[FIGURA: descrição do diagrama, fluxograma ou esquema sugerido]** indicando onde imagens devem entrar.
 
-Os 5 casos devem cobrir: hospital de alta complexidade, UBS, UPA/urgência, atendimento domiciliar, ambulatório.
-Os perfis de pacientes devem variar: criança, adulto jovem, adulto com comorbidade, idoso, gestante ou paciente crítico.
+Os 5 estudos de caso devem cobrir contextos distintos da área de {profile['nome_area']}:
+- Caso 1: {casos[0]}
+- Caso 2: {casos[1]}
+- Caso 3: {casos[2]}
+- Caso 4: {casos[3]}
+- Caso 5: {casos[4]}
+
+Os perfis de equipamentos/materiais e situações devem variar: {equip} ou outros pertinentes à disciplina.
 
 Para cada caso, use esta estrutura interna:
 
 ### Caso [N] — [Título Descritivo da Situação]
 
-**Contexto e Apresentação do Paciente**
-Descreva o ambiente, o perfil completo do paciente, como e por que chegou ao serviço, queixa principal, sinais e sintomas observados. Seja específico e realista.
+**Contexto e Descrição do Cenário**
+Descreva o ambiente de trabalho, o equipamento ou situação envolvida, a condição que originou a necessidade de intervenção, os sinais/sintomas observados e as condições presentes. Seja específico e realista.
 
-**Avaliação e Raciocínio Técnico**
-Descreva o processo de avaliação do técnico: quais dados coleta, como os interpreta, quais hipóteses levanta, como prioriza os problemas e quais protocolos aplica.
+**Análise e Raciocínio Técnico**
+Descreva o processo de avaliação do {profile['nome_profissional']}: quais dados coleta (medições, parâmetros: {profile['grandezas_tipicas']}), como os interpreta, quais hipóteses levanta, como prioriza as ações e quais normas ou procedimentos aplica ({', '.join(profile['normas_regulamentadoras'])}).
 
 **Conduta e Execução Técnica**
-Descreva passo a passo as ações do técnico: procedimentos realizados, técnicas utilizadas, equipamentos manuseados, registros feitos e comunicação com a equipe.
+Descreva passo a passo as ações do {profile['nome_profissional']}: procedimentos realizados, materiais e instrumentos utilizados, EPIs ({profile['epis_tipicos']}) e medidas de segurança adotadas ({profile['procedimentos_seguranca_chave']}), registros feitos e comunicação com a equipe.
 
-**Desfecho e Evolução**
-Descreva como o paciente respondeu, os resultados observados, intercorrências e condição ao final do atendimento.
+**Desfecho e Resultado**
+Descreva como a situação evoluiu, os resultados pós-intervenção, eventuais intercorrências e o estado final após o atendimento.
 
 **Lição Profissional e Pontos Críticos**
 Explique o que o caso ensina, os erros a evitar, as decisões determinantes e as competências da disciplina {disciplina} diretamente aplicadas.
@@ -171,89 +289,127 @@ Explique o que o caso ensina, os erros a evitar, as decisões determinantes e as
 
 
 def _gerar_resumo(client, disciplina: str, ementa: str, contexto: str) -> str:
-    prompt = f"""Você é uma IA especialista sênior em produção de material didático técnico profissionalizante.
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    ambientes_resumo = ", ".join(profile["ambientes_de_trabalho"][:5])
+
+    prompt = f"""Você é uma IA especialista sênior em produção de material didático técnico profissionalizante para a área de {profile['nome_area']}.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 EMENTA: {ementa}
 CONTEXTO COMPLEMENTAR: {contexto}
 
-Gere o RESUMO TÉCNICO COMPLETO E EXPANDIDO da disciplina {disciplina} para apostila técnica profissional.
+Gere o RESUMO TÉCNICO COMPLETO E EXPANDIDO da disciplina {disciplina} para apostila técnica profissional de curso técnico de {profile['nome_area']}.
 
 REGRAS OBRIGATÓRIAS:
 - O conteúdo deve ter entre 2.500 e 3.500 palavras (equivalente a 5 a 7 páginas de apostila A4).
 - Use Markdown estruturado: títulos (##, ###), tabelas, negrito para pontos críticos.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
 - O resumo deve consolidar o aprendizado, não substituir o conteúdo dos tópicos.
+- Use segmentação visual: insira quadros de revisão rápida, checklists e tabelas para organizar os pontos críticos.
 
 Use exatamente esta estrutura:
 
 ## Síntese dos Fundamentos Teóricos
 
-Recapitule os conceitos teóricos centrais da disciplina, as bases científicas, os mecanismos e os fundamentos que o aluno deve ter dominado. Conecte os conceitos entre si mostrando como formam um corpo coerente de conhecimento. Mínimo de 600 palavras.
+Recapitule os conceitos teóricos centrais da disciplina, as bases científicas e técnicas, os princípios de funcionamento e os fundamentos que o aluno deve ter dominado. Conecte os conceitos entre si mostrando como formam um corpo coerente de conhecimento técnico. Mínimo de 600 palavras.
 
 ## Síntese das Competências Práticas
 
-Recapitule as habilidades técnicas desenvolvidas, os procedimentos aprendidos, os protocolos e como aplicá-los corretamente. Enfatize a execução correta e os erros mais comuns a evitar. Mínimo de 600 palavras.
+Recapitule as habilidades técnicas desenvolvidas, os procedimentos aprendidos, os protocolos da área de {profile['nome_area']} e como aplicá-los corretamente. Enfatize a execução correta e os erros mais comuns a evitar. Inclua um checklist das principais competências práticas. Mínimo de 600 palavras.
 
 ## Pontos Críticos para a Prática Profissional
 
-Identifique e desenvolva os 7 pontos mais críticos desta disciplina para a atuação do técnico: situações de alto risco, decisões frequentes, competências inegociáveis e conhecimentos que mais impactam a segurança do paciente. Para cada ponto, apresente: descrição, por que é crítico, consequência do erro e boa prática recomendada. Mínimo de 600 palavras.
+Identifique e desenvolva os 7 pontos mais críticos desta disciplina para a atuação do {profile['nome_profissional']}: situações de alto risco, decisões frequentes no campo, competências inegociáveis e conhecimentos que mais impactam a segurança, a qualidade do serviço e os resultados profissionais. Para cada ponto, apresente: descrição, por que é crítico, consequência do erro e boa prática recomendada. Mínimo de 600 palavras.
 
 ## Conexões com o Exercício da Profissão
 
-Relacione o aprendizado da disciplina com a rotina real de trabalho em diferentes serviços de saúde. Explique como este conhecimento será utilizado diariamente pelo técnico. Mínimo de 400 palavras.
+Relacione o aprendizado da disciplina com a rotina real de trabalho do {profile['nome_profissional']} em diferentes ambientes: {ambientes_resumo}. Explique como este conhecimento será utilizado diariamente. Mínimo de 400 palavras.
 
 ## Glossário Técnico da Disciplina
 
-Apresente e defina os 20 termos técnicos mais importantes da disciplina {disciplina}. Para cada termo: definição completa, origem do termo quando relevante, contexto de uso e exemplo de aplicação prática. Organize em formato de tabela: Termo | Definição | Contexto de Aplicação. Mínimo de 500 palavras.
+Apresente e defina os 20 termos técnicos mais importantes da disciplina {disciplina}. Para cada termo: definição completa, origem do termo quando relevante, contexto de uso na área de {profile['nome_area']} e exemplo de aplicação prática. Organize em formato de tabela: Termo | Definição | Contexto de Aplicação. Mínimo de 500 palavras.
 """
     return _chamar_api(client, prompt, max_tokens=16000)
 
 
-def _gerar_questoes(client, disciplina: str, ementa: str, contexto: str) -> str:
-    prompt = f"""Você é uma IA especialista sênior em avaliação pedagógica para cursos técnicos profissionalizantes.
+def _gerar_questoes(client, disciplina: str, ementa: str, contexto: str) -> tuple:
+    """Retorna (bloco_aluno, bloco_professor). Usa separador ===CADERNO_PROFESSOR=== na saída do LLM."""
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    grandezas = profile["grandezas_tipicas"]
+    nome_prof = profile["nome_profissional"]
+
+    prompt = f"""Você é uma IA especialista sênior em avaliação pedagógica para cursos técnicos profissionalizantes da área de {profile['nome_area']}.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 EMENTA: {ementa}
 CONTEXTO COMPLEMENTAR: {contexto}
 
-Gere a AVALIAÇÃO GERAL COMPLETA da disciplina {disciplina} para apostila técnica profissional.
+Gere a AVALIAÇÃO GERAL COMPLETA da disciplina {disciplina} para apostila técnica profissional de curso técnico de {profile['nome_area']}.
+
+INSTRUÇÃO CRÍTICA DE FORMATAÇÃO: Você DEVE separar a saída em duas partes com a linha exata abaixo (sem espaços extras, exatamente assim):
+===CADERNO_PROFESSOR===
+
+Tudo ANTES do separador é o CADERNO DO ALUNO (apenas enunciados, sem gabaritos ou critérios).
+Tudo DEPOIS do separador é o CADERNO DO PROFESSOR (gabaritos, critérios e competências).
 
 REGRAS OBRIGATÓRIAS:
-- O conteúdo total deve ter entre 3.500 e 5.000 palavras (equivalente a 7 a 10 páginas de apostila A4).
-- Use Markdown estruturado: títulos (##, ###), numeração clara de questões, negrito para gabaritos e critérios.
+- Conteúdo total entre 3.500 e 5.000 palavras (equivalente a 7 a 10 páginas de apostila A4).
+- Use Markdown estruturado: títulos (##, ###), numeração clara de questões.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
-- As questões devem avaliar entendimento real, raciocínio e aplicação — não memorização superficial.
+- As questões devem avaliar entendimento real, raciocínio técnico e aplicação, não memorização superficial.
+- Onde pertinente, inclua questões com parâmetros numéricos ({grandezas}) exigindo interpretação ou cálculo.
 
-Use exatamente esta estrutura:
+CADERNO DO ALUNO — gere as três partes abaixo (sem gabaritos, sem critérios):
 
 ## Parte I — Questões Objetivas (10 questões)
 
-Crie 10 questões objetivas de múltipla escolha (4 alternativas: A, B, C, D) cobrindo os principais tópicos da disciplina {disciplina}. Cada questão deve avaliar compreensão, aplicação ou análise.
+Crie 10 questões objetivas de múltipla escolha (4 alternativas: A, B, C, D) cobrindo os principais tópicos da disciplina {disciplina}. Cada questão deve avaliar compreensão, aplicação ou análise técnica no contexto de {profile['nome_area']}.
+
+## Parte II — Questões Dissertativas (6 questões)
+
+Crie 6 questões dissertativas abrangentes que exijam que o aluno explique, analise, relacione e aplique o conhecimento da disciplina {disciplina} em situações profissionais reais do {nome_prof}. Distribua entre: 2 questões conceituais, 2 questões analíticas, 2 questões de síntese crítica. APENAS os enunciados — sem critérios de resposta nesta parte.
+
+## Parte III — Questões Baseadas em Casos Práticos (4 questões)
+
+Crie 4 questões baseadas em situações profissionais realistas do {nome_prof} relacionadas à disciplina {disciplina}. Cada questão deve apresentar um cenário completo e pedir ao aluno que tome decisões técnicas, justifique condutas e reflita sobre erros possíveis. APENAS os enunciados — sem gabaritos nesta parte.
+
+===CADERNO_PROFESSOR===
 
 ## Gabarito Comentado — Parte I
 
 Para cada questão objetiva: indique a alternativa correta e explique por que é correta e por que as demais são incorretas. Mínimo de 30 palavras por questão.
 
-## Parte II — Questões Dissertativas (6 questões)
+## Critérios de Avaliação — Parte II
 
-Crie 6 questões dissertativas abrangentes que exijam que o aluno explique, analise, relacione e aplique o conhecimento da disciplina {disciplina} em situações profissionais reais. Distribua entre: 2 questões conceituais, 2 questões analíticas, 2 questões de síntese crítica.
+Para cada questão dissertativa (DE1 a DE6): liste os pontos obrigatórios que a resposta deve conter. Mínimo de 200 palavras de critérios por questão.
 
-Para cada questão dissertativa, inclua imediatamente após o enunciado:
-**Critérios de resposta esperada:** [pontos obrigatórios que a resposta deve conter — mínimo 200 palavras por questão]
+## Gabarito e Comentários — Parte III
 
-## Parte III — Questões Baseadas em Casos Práticos (4 questões)
-
-Crie 4 questões baseadas em casos clínicos ou situações profissionais realistas relacionadas a {disciplina}. Cada questão deve apresentar um caso completo e pedir ao aluno que tome decisões, justifique condutas e reflita sobre erros possíveis.
-
-Para cada questão, inclua:
-**Gabarito e comentário:** [resposta completa esperada com justificativa técnica — mínimo 300 palavras por questão]
+Para cada questão de caso prático (CP1 a CP4): resposta completa esperada com justificativa técnica. Mínimo de 300 palavras por questão.
 
 ## Competências Avaliadas nesta Prova
 
 Liste todas as competências técnicas, cognitivas e atitudinais avaliadas nas questões acima.
 """
-    return _chamar_api(client, prompt, max_tokens=16000)
+    resultado = _chamar_api(client, prompt, max_tokens=16000)
+    partes = resultado.split("===CADERNO_PROFESSOR===", 1)
+    bloco_aluno = partes[0].strip()
+    bloco_professor = partes[1].strip() if len(partes) > 1 else ""
+    return bloco_aluno, bloco_professor
 
 
 # =============================================================================
@@ -261,38 +417,58 @@ Liste todas as competências técnicas, cognitivas e atitudinais avaliadas nas q
 # =============================================================================
 
 def gerar_topico(client, disciplina: str, topico: str, contexto: str) -> str:
-    prompt = f"""Você é uma IA especialista sênior em geração de apostilas técnicas profissionalizantes, engenharia pedagógica e produção de material didático para cursos técnicos completos.
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    nome_prof = profile["nome_profissional"]
+    normas_reg = ", ".join(profile["normas_regulamentadoras"])
+    normas_tec = ", ".join(profile["normas_tecnicas"])
+    ambientes_lista = "\n".join(f"- {a}" for a in profile["ambientes_de_trabalho"])
+    grandezas = profile["grandezas_tipicas"]
+
+    prompt = f"""Você é uma IA especialista sênior em geração de apostilas técnicas profissionalizantes, engenharia pedagógica e produção de material didático para cursos técnicos da área de {profile['nome_area']}.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 TÓPICO: {topico}
 CONTEXTO COMPLEMENTAR: {contexto}
 
-Gere o conteúdo COMPLETO, EXPANDIDO e PROFISSIONAL do tópico "{topico}" da disciplina {disciplina} para apostila técnica de curso técnico.
+Gere o conteúdo COMPLETO, EXPANDIDO e PROFISSIONAL do tópico "{topico}" da disciplina {disciplina} para apostila técnica de curso técnico de {profile['nome_area']}.
 
 REGRAS EDITORIAIS OBRIGATÓRIAS:
-- O conteúdo deve ter entre 5.000 e 7.500 palavras (equivalente a 10 a 11 páginas de apostila A4).
-- Use Markdown estruturado: títulos (##, ###), subtítulos (####), tabelas quando úteis, negrito para conceitos-chave e alertas, quadros de atenção iniciados com **Atenção:**.
+- O conteúdo deve ter entre 5.000 e 7.500 palavras (equivalente a 10 a 15 páginas de apostila A4).
+- Use Markdown estruturado: títulos (##, ###), subtítulos (####), tabelas quando úteis, negrito para conceitos-chave e alertas.
+- Quadros de atenção iniciados com **Atenção:** para riscos e advertências.
+- Dicas do profissional iniciadas com **Dica do Técnico:** para boas práticas e atalhos profissionais.
+- Checklists em formato de lista marcada (- [ ] item) para procedimentos e verificações.
+- Revisões rápidas ao final de cada seção de fundamentos: **Revisão Rápida:** [resumo em 2–3 linhas].
+- Marcadores de figura no formato **[FIGURA: descrição detalhada do diagrama, esquema, fluxograma ou imagem sugerida]** indicando onde imagens devem ser inseridas.
+- Onde pertinente, apresente fórmulas ou parâmetros de referência com comentário das variáveis e um exemplo resolvido passo a passo.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
 - Nunca compacte seções. Desenvolva cada seção com profundidade real e exemplos concretos.
 - Nunca use listas sem explicação completa de cada item.
 - Nunca entregue definições curtas ou superficiais.
 
-Gere o tópico seguindo EXATAMENTE estas 12 seções obrigatórias:
+Gere o tópico seguindo EXATAMENTE estas 13 seções obrigatórias:
 
 ## 1. Abertura do Tópico
 
-Contextualize o aluno explicando: o que será estudado neste tópico, por que o tema é importante para a formação técnica, onde aparece na atuação profissional do técnico em saúde, quais competências serão desenvolvidas e como o tema se conecta à disciplina {disciplina} e ao curso técnico. Mínimo de 300 palavras. Escreva de forma motivadora e contextualizadora.
+Inicie com um bloco de **Objetivos de Aprendizagem** listando de 4 a 6 competências que o aluno desenvolverá neste tópico (formato de lista marcada). Em seguida, contextualize o aluno explicando: o que será estudado neste tópico, por que o tema é importante para a formação do {nome_prof}, onde aparece na atuação profissional, quais competências serão desenvolvidas e como o tema se conecta à disciplina {disciplina} e ao curso técnico. Mínimo de 300 palavras. Escreva de forma motivadora e contextualizadora.
 
 ## 2. Fundamentação Teórica Aprofundada
 
-Desenvolva o conteúdo do tópico {topico} em profundidade. Inclua: conceitos centrais completamente desenvolvidos, origem e evolução histórica do conceito (quando relevante), fundamentos científicos e técnicos, relação com normas, protocolos ou boas práticas vigentes no Brasil, e implicações para o cotidiano do técnico. Mínimo de 900 palavras. Não use frases genéricas. Não repita ideias para aumentar tamanho. Cada parágrafo deve avançar o raciocínio.
+Desenvolva o conteúdo do tópico {topico} em profundidade. Inclua: conceitos centrais completamente desenvolvidos, origem e evolução histórica do conceito (quando relevante), fundamentos científicos e técnicos, relação com normas regulamentadoras ({normas_reg}) e normas técnicas ({normas_tec}) vigentes, e implicações para o cotidiano do {nome_prof}. Onde pertinente, apresente fórmulas ou parâmetros de referência ({grandezas}) com descrição das variáveis e exemplo resolvido. Mínimo de 900 palavras. Não use frases genéricas. Cada parágrafo deve avançar o raciocínio.
 
 ## 3. Conceitos Fundamentais
 
 Para cada conceito central do tópico {topico} (mínimo de 6 conceitos), desenvolva um bloco completo contendo:
 - **Definição técnica precisa** do conceito
 - Explicação didática acessível para o nível técnico
-- Exemplo prático real da aplicação deste conceito
+- Exemplo prático real da aplicação deste conceito em ambiente de {profile['nome_area']}
 - Erro mais comum relacionado a este conceito
 - Consequência profissional desse erro e como preveni-lo
 
@@ -300,57 +476,66 @@ Mínimo de 800 palavras no total desta seção.
 
 ## 4. Aprofundamento Técnico
 
-Avance além dos conceitos básicos. Inclua: situações especiais, variações do procedimento ou conceito conforme o contexto clínico, exceções importantes, critérios de decisão do técnico, sinais de alerta que devem ser reconhecidos, limitações da técnica ou abordagem, riscos associados e relação com outros tópicos da disciplina {disciplina}. Mínimo de 700 palavras.
+Avance além dos conceitos básicos. Inclua: situações especiais, variações do procedimento ou conceito conforme o contexto profissional, exceções importantes, critérios de decisão do {nome_prof}, sinais de alerta que devem ser reconhecidos, limitações da técnica ou abordagem, riscos associados e relação com outros tópicos da disciplina {disciplina}.
+
+Quando pertinente ao tópico, aborde tecnologias e sistemas da área de {profile['nome_area']}: {profile['tecnologias_emergentes']}; parâmetros típicos ({grandezas}); softwares e sistemas usados ({profile['softwares_tipicos']}); procedimentos e protocolos de segurança ({profile['procedimentos_seguranca_chave']}). Mínimo de 700 palavras.
 
 ## 5. Aplicação Prática Profissional
 
-Explique detalhadamente como este conteúdo é usado na rotina real de trabalho do técnico. Inclua exemplos concretos em pelo menos 3 contextos distintos e aplicáveis à disciplina {disciplina} (dentre: ambiente hospitalar, UBS, UPA, ambulatório, domicílio, laboratório, gestão, atendimento ao paciente, comunicação com equipe, registro profissional, segurança do paciente). Para cada contexto, descreva: o cenário, as ações do técnico, as decisões tomadas e os resultados esperados. Mínimo de 800 palavras.
+Explique detalhadamente como este conteúdo é usado na rotina real de trabalho do {nome_prof}. Inclua exemplos concretos em pelo menos 3 ambientes distintos, dentre:
+{ambientes_lista}
+
+Para cada contexto, descreva: o cenário, as ações do {nome_prof}, as decisões tomadas e os resultados esperados. Mínimo de 800 palavras.
 
 ## 6. Procedimentos, Protocolos e Boas Práticas
 
-Explique os procedimentos e boas práticas aplicáveis ao tópico {topico}. Inclua: passo a passo conceitual detalhado, cuidados antes da execução, cuidados durante a execução, cuidados após a execução, registros necessários, comunicação com a equipe de saúde, erros que devem ser evitados em cada etapa. Mencione normas e protocolos oficiais vigentes no Brasil (ANVISA, Ministério da Saúde, conselhos profissionais) quando aplicável. Mínimo de 700 palavras.
+Explique os procedimentos e boas práticas aplicáveis ao tópico {topico}. Inclua um checklist passo a passo (use formato - [ ] item) cobrindo: preparação antes da execução (verificações, EPIs: {profile['epis_tipicos']}), procedimento durante a execução, verificações após a execução, registros necessários e comunicação com a equipe. Mencione normas regulamentadoras ({normas_reg}) e normas técnicas ({normas_tec}) quando aplicável ao tópico. Referencie os procedimentos de segurança chave: {profile['procedimentos_seguranca_chave']}. Mínimo de 700 palavras.
 
 ## 7. Segurança, Ética e Responsabilidade Profissional
 
-Desenvolva os aspectos de segurança e ética relacionados ao tópico {topico}. Inclua: riscos para o profissional técnico, riscos para o paciente ou usuário, riscos institucionais, postura ética exigida, responsabilidade técnica e legal, limites de atuação do técnico de acordo com a legislação vigente, quando e como acionar a supervisão de enfermeiro ou médico, como agir diante de dúvidas ou situações-limite. Mínimo de 500 palavras.
+Desenvolva os aspectos de segurança e ética relacionados ao tópico {topico}. Inclua: riscos para o profissional (biológicos, físicos, químicos, ergonômicos conforme o tópico e o perfil de {profile['nome_area']}), riscos para equipamentos/materiais/instalações, riscos ao serviço e ao patrimônio, postura ética exigida, responsabilidade técnica e legal (incluindo {profile['conselho_classe']}), limites de atuação do {nome_prof} e quando acionar o responsável técnico ou superior, como agir diante de dúvidas ou situações-limite. Mínimo de 500 palavras.
 
-## 8. Casos Práticos Comentados
+## 8. Estudos de Caso Comentados
 
-Apresente 2 casos práticos completos e comentados relacionados ao tópico {topico}. Para cada caso, inclua obrigatoriamente:
+Apresente 2 estudos de caso completos e comentados relacionados ao tópico {topico} no contexto de {profile['nome_area']}. Os dois casos devem abordar situações distintas e complementares. Para cada caso, inclua obrigatoriamente:
 
-**Contexto da situação:** ambiente, perfil do paciente ou usuário, condição apresentada
-**Situação-problema:** o desafio real que o técnico enfrenta
-**Dados observáveis:** sinais, sintomas, informações disponíveis
+**Cenário:** ambiente, equipamento ou situação envolvida, condição apresentada
+**Situação-problema:** o desafio técnico real que o {nome_prof} enfrenta
+**Dados observáveis:** parâmetros, leituras, sintomas, informações disponíveis
 **Decisão esperada do técnico:** o que deve ser feito
-**Conduta correta detalhada:** passo a passo das ações corretas
-**Erro comum nessa situação:** o que os técnicos iniciantes costumam fazer errado
-**Consequência do erro:** impacto para o paciente, para o profissional e para a instituição
+**Conduta correta detalhada:** passo a passo das ações corretas, com EPIs e segurança
+**Erro comum nessa situação:** o que os profissionais iniciantes costumam fazer errado
+**Consequência do erro:** impacto para o serviço, para a segurança e para o profissional
 **Raciocínio explicado:** por que a conduta correta é correta
 **Lição profissional:** aprendizado central deste caso
 
-Os dois casos devem abordar situações distintas e complementares do tópico. Mínimo de 600 palavras no total.
+Mínimo de 600 palavras no total.
 
 ## 9. Erros Comuns e Como Evitar
 
-Liste e desenvolva os 6 principais erros cometidos por técnicos iniciantes relacionados ao tópico {topico}. Para cada erro: descreva o erro com precisão, explique por que ele acontece (causas), mostre a consequência profissional real, indique a forma correta de evitar e conecte com a prática profissional real. Mínimo de 500 palavras.
+Liste e desenvolva os 6 principais erros cometidos por profissionais iniciantes relacionados ao tópico {topico}. Para cada erro: descreva o erro com precisão, explique por que ele acontece (causas), mostre a consequência profissional real, indique a forma correta de evitar e conecte com a prática profissional real. Mínimo de 500 palavras.
 
 ## 10. Integração com Outros Tópicos e Disciplinas
 
-Explique como o tópico {topico} se conecta com: tópicos anteriores e posteriores da disciplina {disciplina}, outras disciplinas do curso técnico, competências profissionais do técnico em saúde, e situações reais de trabalho que exigem integração de conhecimentos de múltiplas áreas. Mínimo de 300 palavras.
+Explique como o tópico {topico} se conecta com: tópicos anteriores e posteriores da disciplina {disciplina}, outras disciplinas do curso técnico de {profile['nome_area']}, competências profissionais do {nome_prof} e situações reais de trabalho que exigem integração de conhecimentos de múltiplas áreas técnicas. Mínimo de 300 palavras.
 
 ## 11. Resumo Técnico do Tópico
 
-Faça um resumo técnico útil e objetivo consolidando os pontos mais críticos do aprendizado. O resumo deve reforçar os conceitos centrais, as condutas corretas e os erros a evitar. Deve ter entre 200 e 300 palavras. Nunca deve substituir o conteúdo das seções anteriores.
+Faça um resumo técnico útil e objetivo consolidando os pontos mais críticos do aprendizado. Inclua um quadro de **Revisão Rápida** com os conceitos centrais, as condutas corretas e os erros a evitar. Deve ter entre 200 e 300 palavras. Nunca deve substituir o conteúdo das seções anteriores.
 
 ## 12. Glossário do Tópico
 
 Inclua os 10 principais termos técnicos do tópico {topico}. Para cada termo, desenvolva:
 - **Definição técnica precisa**
 - Explicação didática simples
-- Exemplo de aplicação prática no contexto profissional
+- Exemplo de aplicação prática no contexto de {profile['nome_area']}
 - Cuidado ou erro comum relacionado ao uso ou aplicação deste termo
 
 Organize em blocos por termo. Mínimo de 400 palavras no total desta seção.
+
+## 13. Carreira e Empregabilidade
+
+Explique como o domínio deste tópico contribui para a carreira do {nome_prof}. Aborde: principais segmentos e ambientes que demandam esta competência ({', '.join(profile['ambientes_de_trabalho'][:4])}), funções e cargos que utilizam este conhecimento diretamente, certificações e habilitações relevantes ({normas_reg}, {profile['conselho_classe']}), dicas para destacar esta competência no currículo e em entrevistas técnicas, e tendências do mercado relacionadas ao tópico: {profile['tecnologias_emergentes']}. Mínimo de 250 palavras.
 """
     return _chamar_api(client, prompt, max_tokens=16000)
 
@@ -359,27 +544,50 @@ Organize em blocos por termo. Mínimo de 400 palavras no total desta seção.
 # FUNÇÃO PÚBLICA: gerar_questoes_topico
 # =============================================================================
 
-def gerar_questoes_topico(client, disciplina: str, topico: str, contexto: str) -> str:
-    prompt = f"""Você é uma IA especialista sênior em avaliação pedagógica para cursos técnicos profissionalizantes.
+def gerar_questoes_topico(client, disciplina: str, topico: str, contexto: str) -> tuple:
+    """
+    Retorna (bloco_aluno, bloco_professor).
+    - bloco_aluno: apenas Questões Objetivas, Dissertativas e Casos Práticos (enunciados).
+    - bloco_professor: Gabarito + Comentários + Critérios + Competências avaliadas.
+    """
+    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    nome_prof = profile["nome_profissional"]
+    grandezas = profile["grandezas_tipicas"]
+
+    prompt = f"""Você é uma IA especialista sênior em avaliação pedagógica para cursos técnicos profissionalizantes da área de {profile['nome_area']}.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 TÓPICO: {topico}
 CONTEXTO COMPLEMENTAR: {contexto}
 
-Gere a PÁGINA DE PERGUNTAS, EXERCÍCIOS E GABARITO do tópico "{topico}" na disciplina {disciplina}.
+Gere a PÁGINA DE PERGUNTAS E EXERCÍCIOS do tópico "{topico}" na disciplina {disciplina} para curso técnico de {profile['nome_area']}.
+
+INSTRUÇÃO CRÍTICA DE FORMATAÇÃO: Você DEVE separar a saída em duas partes com a linha exata abaixo (sem espaços extras, exatamente assim):
+===CADERNO_PROFESSOR===
+
+Tudo ANTES do separador é o CADERNO DO ALUNO (apenas enunciados, sem respostas).
+Tudo DEPOIS do separador é o CADERNO DO PROFESSOR (gabarito e critérios completos).
 
 REGRAS OBRIGATÓRIAS:
-- Esta seção deve ter entre 500 e 700 palavras (equivalente a 1 página de apostila A4).
-- Use Markdown estruturado: títulos (###), numeração clara, negrito para gabaritos e critérios.
+- Total entre 500 e 700 palavras (equivalente a 1 página de apostila A4).
+- Use Markdown estruturado: títulos (###), numeração clara.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
-- As perguntas devem avaliar entendimento real e aplicação — não memorização superficial.
-- Seja preciso e objetivo. Não ultrapasse 700 palavras.
+- As perguntas devem avaliar entendimento real e aplicação técnica, não memorização superficial.
+- Onde pertinente, inclua questões com parâmetros numéricos ({grandezas}) exigindo interpretação ou cálculo.
+- Seja preciso e objetivo. Não ultrapasse 700 palavras no total.
 
-Use exatamente esta estrutura:
+CADERNO DO ALUNO (antes do separador):
 
 ### Questoes Objetivas
 
-Crie 5 questoes objetivas de multipla escolha (alternativas A, B, C, D) sobre o topico {topico}. Cada questao deve avaliar compreensao, aplicacao ou analise — nao apenas memorização.
+Crie 5 questoes objetivas de multipla escolha (alternativas A, B, C, D) sobre o topico {topico} no contexto de {profile['nome_area']}. Cada questao deve avaliar compreensao, aplicacao ou analise tecnica — nao apenas memorizacao.
 
 Q1. [Enunciado]
 A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
@@ -398,7 +606,7 @@ A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
 
 ### Questoes Dissertativas
 
-Crie 3 questoes dissertativas que exijam analise e aplicacao do conhecimento do topico {topico} em situacoes profissionais reais.
+Crie 3 questoes dissertativas que exijam analise e aplicacao do conhecimento do topico {topico} em situacoes profissionais reais do {nome_prof}.
 
 D1. [Enunciado completo]
 
@@ -408,11 +616,13 @@ D3. [Enunciado completo]
 
 ### Questoes Baseadas em Caso Pratico
 
-Crie 2 questoes baseadas em casos praticos realistas do topico {topico}. Cada questao deve apresentar uma situacao real e pedir ao aluno que tome uma decisao e explique a conduta.
+Crie 2 questoes baseadas em cenarios realistas do topico {topico} na area de {profile['nome_area']}. Cada questao deve apresentar uma situacao real e pedir ao aluno que tome uma decisao tecnica e explique a conduta correta.
 
-CP1. [Caso e enunciado]
+CP1. [Cenario e enunciado]
 
-CP2. [Caso e enunciado]
+CP2. [Cenario e enunciado]
+
+===CADERNO_PROFESSOR===
 
 ### Gabarito e Criterios de Avaliacao
 
@@ -424,14 +634,22 @@ CP2. [Caso e enunciado]
 
 **Competencias avaliadas:** [lista das competencias tecnicas e atitudinais avaliadas nesta pagina]
 """
-    return _chamar_api(client, prompt, max_tokens=4000)
+    resultado = _chamar_api(client, prompt, max_tokens=4000)
+    partes = resultado.split("===CADERNO_PROFESSOR===", 1)
+    bloco_aluno = partes[0].strip()
+    bloco_professor = partes[1].strip() if len(partes) > 1 else ""
+    return bloco_aluno, bloco_professor
 
 
 # =============================================================================
 # FUNÇÃO PÚBLICA: gerar_documento (mantém a assinatura original)
 # =============================================================================
 
-def gerar_documento(client, disciplina: str, ementa: str, conteudo: str, contexto: str) -> str:
+def gerar_documento(client, disciplina: str, ementa: str, conteudo: str, contexto: str):
+    """
+    Retorna str para a maioria das seções.
+    Retorna tuple(bloco_aluno, bloco_professor) quando conteudo contém instrução de questões/avaliação.
+    """
     instrucao = conteudo.lower()
 
     if "introdução" in instrucao or "introducao" in instrucao or "introdução" in instrucao:
@@ -445,7 +663,14 @@ def gerar_documento(client, disciplina: str, ementa: str, conteudo: str, context
     elif "questão" in instrucao or "quest" in instrucao or "dissertat" in instrucao or "avaliação" in instrucao:
         return _gerar_questoes(client, disciplina, ementa, contexto)
     else:
-        prompt = f"""Você é uma IA especialista sênior em produção de material didático para cursos técnicos profissionalizantes.
+        profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
+        ctx = _bloco_contexto_area(profile)
+        regras = _bloco_regras(profile)
+        prompt = f"""Você é uma IA especialista sênior em produção de material didático para cursos técnicos profissionalizantes da área de {profile['nome_area']}.
+
+{ctx}
+
+{regras}
 
 DISCIPLINA: {disciplina}
 EMENTA: {ementa}
@@ -453,6 +678,7 @@ INSTRUÇÃO: {conteudo}
 CONTEXTO: {contexto}
 
 Gere o conteúdo solicitado com entre 2.000 e 3.000 palavras. Use Markdown estruturado com títulos e subtítulos.
+O conteúdo deve ser orientado para o contexto de {profile['nome_area']}, com exemplos de {', '.join(profile['ambientes_de_trabalho'][:3])}, normas ({', '.join(profile['normas_regulamentadoras'])}) e situações reais de trabalho do {profile['nome_profissional']}.
 Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
 """
         return _chamar_api(client, prompt, max_tokens=16000)

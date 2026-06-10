@@ -404,12 +404,17 @@ def gerar_video_heygen(
         "caption": {"style": "default"},
     }
 
+    debug_payload = {**payload, "script": f"[{len(payload['script'])} chars]"}
+    print(f"[DEBUG] Payload enviado ao HeyGen: {debug_payload}")
+
     resp = requests.post(
         f"{HEYGEN_BASE_URL}/v3/videos",
         headers=headers,
         json=payload,
         timeout=30,
     )
+
+    print(f"[DEBUG] HeyGen resposta HTTP {resp.status_code}: {resp.text[:500]}")
 
     if not resp.ok:
         raise RuntimeError(
@@ -421,6 +426,7 @@ def gerar_video_heygen(
     if not video_id:
         raise RuntimeError(f"HeyGen não retornou video_id: {resp.text[:300]}")
 
+    print(f"[DEBUG] video_id recebido: {video_id}")
     return video_id
 
 
@@ -452,7 +458,7 @@ def aguardar_video(video_id: str, heygen_token: str, max_min: int = 10) -> dict:
         if info["status"] == "completed":
             return info
         if info["status"] == "failed":
-            raise RuntimeError(f"HeyGen falhou: {info.get('error')}")
+            raise RuntimeError(f"HeyGen falhou. Resposta completa: {info}")
         time.sleep(10)
     raise TimeoutError(f"Vídeo não ficou pronto em {max_min} minutos.")
 

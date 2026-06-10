@@ -2,6 +2,8 @@ import os
 import re
 import time
 from src.content_generation.generator import gerar_topico, gerar_questoes_topico
+
+
 def texto_para_markdown(disciplina, texto_bruto):
     secoes = {
         "INTRODUCAO":  "## Introdução",
@@ -21,6 +23,8 @@ def texto_para_markdown(disciplina, texto_bruto):
         md += f"{titulo_md}\n\n{conteudo}\n\n"
 
     return md
+
+
 def limpar_texto(texto):
     return "\n".join([linha.strip() for linha in texto.strip().splitlines() if linha.strip()])
 
@@ -51,28 +55,47 @@ def _controle_editorial_topico(i: int, nome: str) -> str:
     )
 
 
-def juntar_topicos_formatado(introducao, objetivos, topicos_dict, exemplos, resumo, questoes):
-    partes = []
-    partes.append("INTRODUCAO:\n" + limpar_texto(introducao))
-    partes.append("OBJETIVOS:\n" + limpar_texto(objetivos))
+def juntar_topicos_formatado(introducao, objetivos, topicos_dict, exemplos, resumo, questoes_aluno, questoes_professor):
+    """
+    Retorna (doc_aluno, doc_professor).
+    topicos_dict deve ter chaves 'conteudo', 'questoes_aluno', 'questoes_professor' por tópico.
+    """
 
-    topicos_texto = ["TOPICOS:"]
-    for i, (nome, dados) in enumerate(topicos_dict.items(), 1):
-        conteudo = dados["conteudo"] if isinstance(dados, dict) else dados
-        questoes_topico = dados.get("questoes", "") if isinstance(dados, dict) else ""
-        topicos_texto.append(f"\n### Tópico {i}: {nome}")
-        topicos_texto.append(limpar_texto(conteudo))
-        if questoes_topico:
-            topicos_texto.append(f"\n#### Perguntas, Exercícios e Gabarito — Tópico {i}: {nome}")
-            topicos_texto.append(limpar_texto(questoes_topico))
-        topicos_texto.append(_controle_editorial_topico(i, nome))
-    partes.append("\n\n".join(topicos_texto))
+    def _build(questoes_geral, chave_questoes_topico, titulo_questoes):
+        partes = []
+        partes.append("INTRODUCAO:\n" + limpar_texto(introducao))
+        partes.append("OBJETIVOS:\n" + limpar_texto(objetivos))
 
-    partes.append("EXEMPLOS:\n" + limpar_texto(exemplos))
-    partes.append("RESUMO:\n" + limpar_texto(resumo))
-    partes.append("QUESTOES:\n" + limpar_texto(questoes))
+        topicos_texto = ["TOPICOS:"]
+        for i, (nome, dados) in enumerate(topicos_dict.items(), 1):
+            conteudo = dados["conteudo"] if isinstance(dados, dict) else dados
+            questoes_topico = dados.get(chave_questoes_topico, "") if isinstance(dados, dict) else ""
+            topicos_texto.append(f"\n### Tópico {i}: {nome}")
+            topicos_texto.append(limpar_texto(conteudo))
+            if questoes_topico:
+                topicos_texto.append(f"\n#### {titulo_questoes} — Tópico {i}: {nome}")
+                topicos_texto.append(limpar_texto(questoes_topico))
+            topicos_texto.append(_controle_editorial_topico(i, nome))
+        partes.append("\n\n".join(topicos_texto))
 
-    return "\n\n".join(partes)
+        partes.append("EXEMPLOS:\n" + limpar_texto(exemplos))
+        partes.append("RESUMO:\n" + limpar_texto(resumo))
+        partes.append("QUESTOES:\n" + limpar_texto(questoes_geral))
+
+        return "\n\n".join(partes)
+
+    doc_aluno = _build(
+        questoes_aluno,
+        "questoes_aluno",
+        "Perguntas e Exercícios",
+    )
+    doc_professor = _build(
+        questoes_professor,
+        "questoes_professor",
+        "Perguntas, Exercícios e Gabarito",
+    )
+    return doc_aluno, doc_professor
+
 
 def gerar_markdowns(
     base_geral,
@@ -125,8 +148,6 @@ def gerar_markdowns(
         with open(os.path.join(pasta_curso, "_titulo.txt"), "w", encoding="utf-8") as _f:
             _f.write(titulo_real)
 
-        nome_curso = titulo_real
-
         for disciplina, aulas in disciplinas.items():
             contador += 1
             print(f"[{contador}/{total_disciplinas}] Gerando: {disciplina} ({len(aulas)} aulas)...")
@@ -160,7 +181,7 @@ def gerar_markdowns(
                 contexto = contexto[:3000]
 
                 # -------------------------
-                # LLM — uma chamada por disciplina
+                # LLM — uma chamada por tópico
                 # -------------------------
                 topicos_dict = {}
                 for aula in aulas:
@@ -169,8 +190,12 @@ def gerar_markdowns(
                     conteudo_topico = gerar_topico(gemini, disciplina, topico, contexto)
                     time.sleep(10)
                     print(f"      ❓ Gerando questões: {topico}")
-                    questoes_topico = gerar_questoes_topico(gemini, disciplina, topico, contexto)
-                    topicos_dict[topico] = {"conteudo": conteudo_topico, "questoes": questoes_topico}
+                    questoes_aluno_t, questoes_professor_t = gerar_questoes_topico(gemini, disciplina, topico, contexto)
+                    topicos_dict[topico] = {
+                        "conteudo": conteudo_topico,
+                        "questoes_aluno": questoes_aluno_t,
+                        "questoes_professor": questoes_professor_t,
+                    }
                     time.sleep(10)
 
                 intro     = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas a introdução.", contexto)
@@ -181,23 +206,38 @@ def gerar_markdowns(
                 time.sleep(10)
                 resumo    = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere apenas o resumo.", contexto)
                 time.sleep(10)
-                questoes  = gerar_documento(gemini, disciplina, ementa_consolidada, "Gere a avaliação geral completa da disciplina com questões objetivas, dissertativas e baseadas em casos práticos.", contexto)
+                questoes_result = gerar_documento(
+                    gemini, disciplina, ementa_consolidada,
+                    "Gere a avaliação geral completa da disciplina com questões objetivas, dissertativas e baseadas em casos práticos.",
+                    contexto
+                )
 
-                documento = juntar_topicos_formatado(intro, objetivos, topicos_dict, exemplos, resumo, questoes)
-                
-                
+                # gerar_documento retorna tupla no caso de questões
+                if isinstance(questoes_result, tuple):
+                    questoes_aluno, questoes_professor = questoes_result
+                else:
+                    questoes_aluno = questoes_result
+                    questoes_professor = questoes_result
+
+                doc_aluno, doc_professor = juntar_topicos_formatado(
+                    intro, objetivos, topicos_dict, exemplos, resumo,
+                    questoes_aluno, questoes_professor,
+                )
+
                 # -------------------------
-                # SALVA .md
+                # SALVA dois .md por disciplina
                 # -------------------------
-                
                 nome_arquivo = _sanitizar_nome_arquivo(disciplina)
 
-                caminho_doc = os.path.join(pasta_curso, f"{nome_arquivo}.md")
+                caminho_aluno = os.path.join(pasta_curso, f"{nome_arquivo}.md")
+                with open(caminho_aluno, "w", encoding="utf-8") as f:
+                    f.write(texto_para_markdown(disciplina, doc_aluno))
 
-                with open(caminho_doc, "w", encoding="utf-8") as f:
-                    f.write(texto_para_markdown(disciplina, documento))
+                caminho_professor = os.path.join(pasta_curso, f"{nome_arquivo}_Professor.md")
+                with open(caminho_professor, "w", encoding="utf-8") as f:
+                    f.write(texto_para_markdown(disciplina, doc_professor))
 
-                print(f"   ✅ Salvo ({len(aulas)} aulas)")
+                print(f"   ✅ Salvo — aluno: {nome_arquivo}.md | professor: {nome_arquivo}_Professor.md")
                 gerados += 1
 
                 time.sleep(35)  # evita rate limit
@@ -206,6 +246,6 @@ def gerar_markdowns(
                 print(f"   ❌ Erro: {e}")
                 erros.append({"disciplina": disciplina, "erro": str(e)})
 
-    print(f"\n✅ {gerados} documentos gerados.")
+    print(f"\n✅ {gerados} disciplinas geradas (2 arquivos cada).")
     if erros:
         print(f"⚠️ {len(erros)} erros: {[e['disciplina'] for e in erros]}")
