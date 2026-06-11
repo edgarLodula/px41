@@ -78,37 +78,39 @@ def _upload_slides(paths, heygen_token):
     return asset_ids
 
 
+# ─── detecção de tipo ─────────────────────────────────────────────────────────
+
+_TALKING_PHOTO_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+
+
+def _detectar_tipo_character(character_id, heygen_token=None):
+    """
+    Detecta o tipo do character pelo formato do ID — sem chamada de rede.
+
+    - Hex 32 chars (ex: f232311873f04c73a2a26df1f9cada00) -> talking_photo
+    - Qualquer outro formato (descritivo) -> avatar
+
+    heygen_token mantido apenas para compatibilidade da assinatura; não é usado.
+    """
+    if not character_id or not isinstance(character_id, str):
+        raise ValueError(f"character_id invalido: {character_id!r}")
+    if _TALKING_PHOTO_ID_RE.match(character_id.strip()):
+        return "talking_photo"
+    return "avatar"
+
+
 # ─── preflight ────────────────────────────────────────────────────────────────
 
-def _validar_preflight(avatar_id, voice_id, cenas, slide_asset_ids, heygen_token):
+def _validar_preflight(character_id, character_type, voice_id, cenas, slide_asset_ids, heygen_token):
     """
     Valida tudo antes de submeter ao HeyGen — sem crédito consumido até aqui.
     Lança ValueError com mensagem clara se algo estiver errado.
+    A validação de avatar/talking_photo já foi feita em _detectar_tipo_character.
     """
     headers = {"X-Api-Key": heygen_token}
     erros = []
 
-    # 1. Avatar existe na conta?
-    try:
-        resp = requests.get(
-            "https://api.heygen.com/v2/avatars",
-            headers=headers,
-            timeout=15,
-        )
-        if resp.ok:
-            avatars = resp.json().get("data", {}).get("avatars", [])
-            ids_disponiveis = [a.get("avatar_id") for a in avatars]
-            if avatar_id not in ids_disponiveis:
-                erros.append(
-                    f"HEYGEN_AVATAR_ID '{avatar_id}' nao encontrado na conta.\n"
-                    f"   Disponiveis ({len(ids_disponiveis)}): {ids_disponiveis[:8]}"
-                )
-        else:
-            print(f"   [AVISO] Nao foi possivel validar avatar_id: HTTP {resp.status_code}")
-    except Exception as e:
-        print(f"   [AVISO] Falha ao consultar avatars: {e}")
-
-    # 2. Voice existe na conta?
+    # 1. Voice existe na conta?
     try:
         resp = requests.get(
             "https://api.heygen.com/v2/voices",
@@ -128,7 +130,7 @@ def _validar_preflight(avatar_id, voice_id, cenas, slide_asset_ids, heygen_token
     except Exception as e:
         print(f"   [AVISO] Falha ao consultar voices: {e}")
 
-    # 3. Cada cena tem fala válida e dentro do limite?
+    # 2. Cada cena tem fala válida e dentro do limite?
     for i, cena in enumerate(cenas):
         fala = cena.get("fala", "").strip()
         if not fala:
@@ -139,19 +141,17 @@ def _validar_preflight(avatar_id, voice_id, cenas, slide_asset_ids, heygen_token
                 f"(limite {HEYGEN_FALA_MAX_CHARS}). Será truncada automaticamente."
             )
 
-    # 4. Todos os asset_ids foram preenchidos?
+    # 3. Todos os asset_ids foram preenchidos?
     for i, aid in enumerate(slide_asset_ids):
         if not aid or not isinstance(aid, str):
             erros.append(f"Slide {i}: asset_id invalido ou vazio ({aid!r}).")
 
-    # Falha dura apenas nos erros que impediriam a renderização
-    erros_fatais = [e for e in erros if "HEYGEN_AVATAR_ID" in e or "HEYGEN_VOICE_ID" in e
+    erros_fatais = [e for e in erros if "HEYGEN_VOICE_ID" in e
                     or "fala vazia" in e or "asset_id invalido" in e]
     if erros_fatais:
         raise ValueError("Pre-flight FALHOU — corriga antes de submeter:\n" +
                          "\n".join(f"  • {e}" for e in erros_fatais))
 
-    # Avisos não-fatais (ex.: fala longa que será truncada)
     avisos = [e for e in erros if e not in erros_fatais]
     for a in avisos:
         print(f"   [AVISO] {a}")
@@ -159,15 +159,25 @@ def _validar_preflight(avatar_id, voice_id, cenas, slide_asset_ids, heygen_token
 
 # ─── montar input ─────────────────────────────────────────────────────────────
 
-def _montar_video_input(cena, avatar_id, voice_id, slide_asset_id=None):
-    video_input = {
-        "character": {
+def _montar_video_input(cena, character_id, character_type, voice_id, slide_asset_id=None):
+    if character_type == "talking_photo":
+        character = {
+            "type": "talking_photo",
+            "talking_photo_id": character_id,
+            "scale": 0.75,
+            "offset": {"x": 0.32, "y": 0.05},
+        }
+    else:
+        character = {
             "type": "avatar",
-            "avatar_id": avatar_id,
+            "avatar_id": character_id,
             "avatar_style": "normal",
             "scale": 0.75,
             "offset": {"x": 0.32, "y": 0.05},
-        },
+        }
+
+    video_input = {
+        "character": character,
         "voice": {
             "type": "text",
             "input_text": cena["fala"].strip()[:HEYGEN_FALA_MAX_CHARS],
@@ -198,6 +208,11 @@ def gerar_video(roteiro, caminho_saida, pasta_slides, disciplina=""):
     if faltando:
         raise Exception(f"Variáveis de ambiente ausentes no .env: {', '.join(faltando)}")
 
+    # Detectar tipo do character (avatar vs talking_photo)
+    print("Detectando tipo do character no HeyGen...")
+    character_type = _detectar_tipo_character(avatar_id, token)
+    print(f"   Tipo detectado: {character_type}")
+
     # 1. Parsear cenas
     cenas = _parsear_cenas(roteiro)
     if not cenas:
@@ -221,12 +236,12 @@ def gerar_video(roteiro, caminho_saida, pasta_slides, disciplina=""):
 
     # 5. Pre-flight — valida tudo ANTES de consumir crédito
     print("Executando validacao pre-flight...")
-    _validar_preflight(avatar_id, voice_id, cenas, slide_asset_ids, token)
+    _validar_preflight(avatar_id, character_type, voice_id, cenas, slide_asset_ids, token)
     print("   Pre-flight OK.")
 
     # 6. Montar video_inputs
     video_inputs = [
-        _montar_video_input(cenas[i], avatar_id, voice_id, slide_asset_ids[i])
+        _montar_video_input(cenas[i], avatar_id, character_type, voice_id, slide_asset_ids[i])
         for i in range(len(cenas))
     ]
 

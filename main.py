@@ -53,7 +53,7 @@ def main():
     # ------------------------------------------------------------------
     # 1. DESCOBRE TODOS OS PDFs em data/input/
     # ------------------------------------------------------------------
-    """
+    
     pdfs = sorted([
         f for f in os.listdir(PASTA_PDFS)
         if f.lower().endswith(".pdf")
@@ -167,7 +167,7 @@ def main():
 
     n_aluno = len(glob.glob(os.path.join(PASTA_PDF, "aluno", "*", "*.pdf")))
     n_prof  = len(glob.glob(os.path.join(PASTA_PDF, "professor", "*", "*.pdf")))
-"""
+    """
     # ------------------------------------------------------------------
     # 9. VÍDEOS (requer HEYGEN_API_KEY)
     # ------------------------------------------------------------------
@@ -184,7 +184,7 @@ def main():
             )
         except Exception as e:
             print(f"Erro na geração de vídeos: {e}")
-
+    """
     # ------------------------------------------------------------------
     # RESUMO FINAL
     # ------------------------------------------------------------------
