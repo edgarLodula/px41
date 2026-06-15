@@ -20,6 +20,8 @@ from src.content_generation.area_profiles import get_profile
 from src.output_formatter.markdown_generator import gerar_markdowns
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
+from src.content_generation.area_profiles import get_profile, detectar_area_por_nome_pdf
+
 
 # =========================
 # PATHS
@@ -44,11 +46,21 @@ def main():
     heyGen_token = os.getenv("HEYGEN_API_KEY")
     openai_token = os.getenv("OPENAI_API_KEY")
 
+    AREA_POR_PDF = {
+    "Tabela_Completa_Conteudo_Programatico_Tecnico_Enfermagem":      "enfermagem",
+    "Tabela_Conteudo_Programatico_Tecnico_Administracao":            "administracao",
+    "Tabela_Conteudo_Programatico_Tecnico_Eletromecanica":           "eletromecanica",
+    "Tabela_Conteudo_Programatico_Tecnico_Eletrotecnica":            "eletrotecnica",
+    "Tabela_Conteudo_Programatico_Tecnico_Refrigeracao_Climatizacao": "refrigeracao",
+}
     # ------------------------------------------------------------------
     # PERFIL DA ÁREA ATIVO
     # ------------------------------------------------------------------
-    profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
-    print(f"\nPerfil da área ativo: {profile['nome_area']} ({profile['nome_profissional']})")
+    def _resolver_area_pdf(nome_pdf: str) -> str:
+        base = nome_pdf.replace(".pdf", "")
+        if base in AREA_POR_PDF:
+            return AREA_POR_PDF[base]
+        return detectar_area_por_nome_pdf(nome_pdf)
 
     # ------------------------------------------------------------------
     # 1. DESCOBRE TODOS OS PDFs em data/input/
@@ -77,6 +89,8 @@ def main():
     # ------------------------------------------------------------------
     base_geral = []
     pdfs_ok    = []
+    areas_por_arquivo = {}  # nome_pdf → area_key
+
 
     for nome_pdf in pdfs:
         caminho_pdf = os.path.join(PASTA_PDFS, nome_pdf)
@@ -84,6 +98,17 @@ def main():
         print(f"\n{'='*60}")
         print(f"Processando: {nome_pdf}")
         print(f"{'='*60}")
+
+        # ⭐ Detecta a área DESTE PDF (não usa .env)
+        try:
+            area_pdf = _resolver_area_pdf(nome_pdf)
+            profile_pdf = get_profile(area_pdf)
+            print(f"   Área detectada: {profile_pdf['nome_area']} ({profile_pdf['nome_profissional']})")
+        except ValueError as e:
+            print(f"   ❌ {e} — pulando este PDF.")
+            continue
+
+        areas_por_arquivo[nome_pdf] = area_pdf
 
         # PDF → CSV
         nome_base   = nome_pdf.replace(".pdf", "")
@@ -94,8 +119,12 @@ def main():
         registros = extrair_base_csv(caminho_pdf, PASTA_CSV, PASTA_JSON)
 
         if not registros:
-            print(f"   Nenhum registro extraído de {nome_pdf} — verifique se o PDF contém tabelas.")
+            print(f"   Nenhum registro extraído de {nome_pdf}.")
             continue
+
+        # ⭐ Injeta a área em cada registro
+        for r in registros:
+            r["area"] = area_pdf
 
         base_geral.extend(registros)
         pdfs_ok.append(nome_pdf)
@@ -140,7 +169,7 @@ def main():
     # 6. LLM
     # ------------------------------------------------------------------
     client = configurar_openai()
-
+    
     # ------------------------------------------------------------------
     # 7. MARKDOWN — um .md por disciplina (aluno + professor)
     # ------------------------------------------------------------------
@@ -190,7 +219,6 @@ def main():
     # ------------------------------------------------------------------
     print(f"\n{'='*60}")
     print(f"Pipeline finalizado!")
-    print(f"   • Perfil ativo : {profile['nome_area']} ({profile['nome_profissional']})")
     print(f"   • PDFs gerados : {n_aluno} (aluno) + {n_prof} (professor) = {n_aluno + n_prof}")
     print(f"   • Markdowns    : {PASTA_MARKDOWN}")
     print(f"   • Apostilas    : {PASTA_PDF}/{{aluno|professor}}/<curso>/<disciplina>.pdf")

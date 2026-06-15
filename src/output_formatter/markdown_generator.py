@@ -233,9 +233,9 @@ def gerar_markdowns(
                 with open(caminho_aluno, "w", encoding="utf-8") as f:
                     f.write(texto_para_markdown(disciplina, doc_aluno))
 
-                caminho_professor = os.path.join(pasta_curso, f"{nome_arquivo}_Professor.md")
+                """caminho_professor = os.path.join(pasta_curso, f"{nome_arquivo}_Professor.md")
                 with open(caminho_professor, "w", encoding="utf-8") as f:
-                    f.write(texto_para_markdown(disciplina, doc_professor))
+                    f.write(texto_para_markdown(disciplina, doc_professor))"""
 
                 print(f"   ✅ Salvo — aluno: {nome_arquivo}.md | professor: {nome_arquivo}_Professor.md")
                 gerados += 1

@@ -1,331 +1,550 @@
-import json
 import os
-import re
 import time
-import requests
+from openai import OpenAI
 
-from src.video_generator.slides_generator import gerar_slides
-
-HEYGEN_FALA_MAX_CHARS = 1500   # limite seguro por cena no HeyGen v2
+from src.content_generation.area_profiles import get_profile
 
 
-# ─── parsear ──────────────────────────────────────────────────────────────────
-
-def _parsear_cenas(roteiro):
-    """
-    Divide o roteiro em cenas. Cada cena é um dict com:
-      - fala:   texto entre aspas após [AVATAR]
-      - visual: descrição após [VISUAL/B-ROLL]  (pode ser None)
-      - texto:  texto após [TEXTO NA TELA]       (pode ser None)
-    """
-    blocos = re.split(r'\[AVATAR\]\s*(?:\(.*?\))?\s*', roteiro, flags=re.DOTALL)
-    cenas = []
-
-    for bloco in blocos:
-        if not bloco.strip():
-            continue
-
-        fala_match = re.search(r'"([^"]+)"', bloco, re.DOTALL)
-        if not fala_match:
-            continue
-        fala = fala_match.group(1).strip().replace('\n', ' ')
-
-        visual_match = re.search(r'\[VISUAL/B-ROLL\]\s*(.+?)(?=\[|$)', bloco, re.DOTALL)
-        visual = visual_match.group(1).strip() if visual_match else None
-
-        texto_match = re.search(r'\[TEXTO NA TELA\]\s*(.+?)(?=\[|$)', bloco, re.DOTALL)
-        texto = texto_match.group(1).strip() if texto_match else None
-
-        cenas.append({"fala": fala, "visual": visual, "texto": texto})
-
-    return cenas
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 
-# ─── upload ───────────────────────────────────────────────────────────────────
-
-def _upload_slides(paths, heygen_token):
-    """
-    Faz upload de cada PNG para o HeyGen Asset API.
-    Retorna list[str] de asset_ids na mesma ordem.
-    """
-    asset_ids = []
-    headers = {"X-Api-Key": heygen_token}
-
-    for path in paths:
-        nome = os.path.basename(path)
-        with open(path, "rb") as f:
-            conteudo = f.read()
-        resp = requests.post(
-            "https://upload.heygen.com/v1/asset",
-            headers={**headers, "Content-Type": "image/png"},
-            data=conteudo,
-            timeout=30,
-        )
-        if not resp.ok:
-            raise RuntimeError(
-                f"Upload falhou para {nome}: HTTP {resp.status_code} — {resp.text[:300]}"
-            )
-        data = resp.json().get("data") or {}
-        asset_id = data.get("asset_id") or data.get("id")
-        if not asset_id:
-            raise RuntimeError(
-                f"HeyGen Asset nao retornou asset_id para {nome}. "
-                f"Resposta completa: {resp.text[:300]}"
-            )
-        asset_ids.append(asset_id)
-        print(f"   Upload OK: {nome} → {asset_id}")
-
-    return asset_ids
+def configurar_openai():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise Exception("OPENAI_API_KEY não encontrada no .env.")
+    client = OpenAI(api_key=api_key)
+    print(f"OpenAI configurado (modelo: {OPENAI_MODEL})")
+    return client
 
 
-# ─── detecção de tipo ─────────────────────────────────────────────────────────
-
-_TALKING_PHOTO_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
-
-
-def _detectar_tipo_character(character_id, heygen_token=None):
-    """
-    Detecta o tipo do character pelo formato do ID — sem chamada de rede.
-
-    - Hex 32 chars (ex: f232311873f04c73a2a26df1f9cada00) -> talking_photo
-    - Qualquer outro formato (descritivo) -> avatar
-
-    heygen_token mantido apenas para compatibilidade da assinatura; não é usado.
-    """
-    if not character_id or not isinstance(character_id, str):
-        raise ValueError(f"character_id invalido: {character_id!r}")
-    if _TALKING_PHOTO_ID_RE.match(character_id.strip()):
-        return "talking_photo"
-    return "avatar"
-
-
-# ─── preflight ────────────────────────────────────────────────────────────────
-
-def _validar_preflight(character_id, character_type, voice_id, cenas, slide_asset_ids, heygen_token):
-    """
-    Valida tudo antes de submeter ao HeyGen — sem crédito consumido até aqui.
-    Lança ValueError com mensagem clara se algo estiver errado.
-    A validação de avatar/talking_photo já foi feita em _detectar_tipo_character.
-    """
-    headers = {"X-Api-Key": heygen_token}
-    erros = []
-
-    # 1. Voice existe na conta?
-    try:
-        resp = requests.get(
-            "https://api.heygen.com/v2/voices",
-            headers=headers,
-            timeout=15,
-        )
-        if resp.ok:
-            voices = resp.json().get("data", {}).get("voices", [])
-            ids_disponiveis = [v.get("voice_id") for v in voices]
-            if voice_id not in ids_disponiveis:
-                erros.append(
-                    f"HEYGEN_VOICE_ID '{voice_id}' nao encontrado na conta.\n"
-                    f"   Disponiveis ({len(ids_disponiveis)}): {ids_disponiveis[:8]}"
-                )
-        else:
-            print(f"   [AVISO] Nao foi possivel validar voice_id: HTTP {resp.status_code}")
-    except Exception as e:
-        print(f"   [AVISO] Falha ao consultar voices: {e}")
-
-    # 2. Cada cena tem fala válida e dentro do limite?
-    for i, cena in enumerate(cenas):
-        fala = cena.get("fala", "").strip()
-        if not fala:
-            erros.append(f"Cena {i}: fala vazia.")
-        elif len(fala) > HEYGEN_FALA_MAX_CHARS:
-            erros.append(
-                f"Cena {i}: fala com {len(fala)} chars "
-                f"(limite {HEYGEN_FALA_MAX_CHARS}). Será truncada automaticamente."
-            )
-
-    # 3. Todos os asset_ids foram preenchidos?
-    for i, aid in enumerate(slide_asset_ids):
-        if not aid or not isinstance(aid, str):
-            erros.append(f"Slide {i}: asset_id invalido ou vazio ({aid!r}).")
-
-    erros_fatais = [e for e in erros if "HEYGEN_VOICE_ID" in e
-                    or "fala vazia" in e or "asset_id invalido" in e]
-    if erros_fatais:
-        raise ValueError("Pre-flight FALHOU — corriga antes de submeter:\n" +
-                         "\n".join(f"  • {e}" for e in erros_fatais))
-
-    avisos = [e for e in erros if e not in erros_fatais]
-    for a in avisos:
-        print(f"   [AVISO] {a}")
-
-
-# ─── montar input ─────────────────────────────────────────────────────────────
-
-def _montar_video_input(cena, character_id, character_type, voice_id, slide_asset_id=None):
-    if character_type == "talking_photo":
-        character = {
-            "type": "talking_photo",
-            "talking_photo_id": character_id,
-            "scale": 0.75,
-            "offset": {"x": 0.32, "y": 0.05},
-        }
+def _tratar_erro_openai(erro: str, tentativa: int, max_tentativas: int):
+    if "401" in erro or "authentication" in erro.lower() or "invalid_api_key" in erro.lower():
+        raise Exception(f"Chave OpenAI inválida. Detalhe: {erro}")
+    elif "429" in erro or "503" in erro or "500" in erro:
+        espera = (2 ** tentativa) * 15
+        print(f"Rate limit. Aguardando {espera}s... ({tentativa + 1}/{max_tentativas})")
+        time.sleep(espera)
     else:
-        character = {
-            "type": "avatar",
-            "avatar_id": character_id,
-            "avatar_style": "normal",
-            "scale": 0.75,
-            "offset": {"x": 0.32, "y": 0.05},
-        }
-
-    video_input = {
-        "character": character,
-        "voice": {
-            "type": "text",
-            "input_text": cena["fala"].strip()[:HEYGEN_FALA_MAX_CHARS],
-            "voice_id": voice_id,
-            "speed": 1.0,
-        },
-    }
-    if slide_asset_id:
-        video_input["background"] = {
-            "type": "image",
-            "image_asset_id": slide_asset_id,
-        }
-    return video_input
+        raise
 
 
-# ─── entry point ──────────────────────────────────────────────────────────────
-
-def gerar_video(roteiro, caminho_saida, pasta_slides, disciplina=""):
-    token     = os.getenv("HEYGEN_API_KEY")
-    avatar_id = os.getenv("HEYGEN_AVATAR_ID")
-    voice_id  = os.getenv("HEYGEN_VOICE_ID")
-
-    faltando = [k for k, v in {
-        "HEYGEN_API_KEY":   token,
-        "HEYGEN_AVATAR_ID": avatar_id,
-        "HEYGEN_VOICE_ID":  voice_id,
-    }.items() if not v]
-    if faltando:
-        raise Exception(f"Variáveis de ambiente ausentes no .env: {', '.join(faltando)}")
-
-    # Detectar tipo do character (avatar vs talking_photo)
-    print("Detectando tipo do character no HeyGen...")
-    character_type = _detectar_tipo_character(avatar_id, token)
-    print(f"   Tipo detectado: {character_type}")
-
-    # 1. Parsear cenas
-    cenas = _parsear_cenas(roteiro)
-    if not cenas:
-        raise Exception("Nenhuma cena [AVATAR] encontrada no roteiro.")
-    cenas = cenas[:50]
-
-    # 2. Gerar 1 slide por cena
-    print(f"Gerando {len(cenas)} slide(s)...")
-    slide_paths = gerar_slides(cenas, pasta_slides, disciplina)
-
-    # 3. Upload para HeyGen Assets
-    print(f"Fazendo upload de {len(slide_paths)} slide(s) para HeyGen Assets...")
-    slide_asset_ids = _upload_slides(slide_paths, token)
-
-    # 4. Contagens
-    if not (len(cenas) == len(slide_paths) == len(slide_asset_ids)):
-        raise AssertionError(
-            f"ERRO: contagens divergem — "
-            f"cenas={len(cenas)}, slides={len(slide_paths)}, asset_ids={len(slide_asset_ids)}"
-        )
-
-    # 5. Pre-flight — valida tudo ANTES de consumir crédito
-    print("Executando validacao pre-flight...")
-    _validar_preflight(avatar_id, character_type, voice_id, cenas, slide_asset_ids, token)
-    print("   Pre-flight OK.")
-
-    # 6. Montar video_inputs
-    video_inputs = [
-        _montar_video_input(cenas[i], avatar_id, character_type, voice_id, slide_asset_ids[i])
-        for i in range(len(cenas))
-    ]
-
-    # Salva payload completo para inspeção
-    pasta_debug = os.path.join(os.path.dirname(caminho_saida))
-    os.makedirs(pasta_debug, exist_ok=True)
-    caminho_payload = os.path.join(pasta_debug, "payload_debug.json")
-    with open(caminho_payload, "w", encoding="utf-8") as f:
-        json.dump({"video_inputs": video_inputs}, f, indent=2, ensure_ascii=False)
-    print(f"Payload completo salvo em: {caminho_payload}")
-
-    print(f"\n[DEBUG] Primeiro video_input (de {len(video_inputs)} total):")
-    print(json.dumps(video_inputs[0], indent=2, ensure_ascii=False))
-    print()
-
-    # 7. Submeter ao HeyGen v2
-    headers = {
-        "X-Api-Key": token,
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "video_inputs": video_inputs,
-        "dimension": {"width": 1280, "height": 720},
-    }
-
-    response = requests.post(
-        "https://api.heygen.com/v2/video/generate",
-        headers=headers,
-        json=payload,
-    )
-
-    resp_json = response.json()
-    data = resp_json.get("data")
-
-    if not data or not data.get("video_id"):
-        raise Exception(
-            f"HeyGen não retornou video_id. HTTP {response.status_code}. "
-            f"Resposta: {resp_json}"
-        )
-
-    video_id = data["video_id"]
-
-    # Salva video_id imediatamente — se o polling cair, não precisa re-submeter
-    caminho_vid_id = os.path.join(pasta_debug, "video_id.txt")
-    with open(caminho_vid_id, "w") as f:
-        f.write(video_id)
-    print(f"video_id salvo em: {caminho_vid_id}")
-    print(f"video_id: {video_id} — aguardando renderizacao...")
-
-    # 8. Polling
-    tentativa = 0
-    while True:
-        time.sleep(10)
-        tentativa += 1
-
-        poll_resp = requests.get(
-            f"https://api.heygen.com/v1/video_status.get?video_id={video_id}",
-            headers=headers,
-        )
-        poll_json   = poll_resp.json()
-        status_data = poll_json.get("data")
-
-        if not status_data:
-            raise Exception(
-                f"HeyGen não retornou status. HTTP {poll_resp.status_code}. "
-                f"Resposta: {poll_json}"
+def _chamar_api(client, prompt: str, max_tokens: int = 16000) -> str:
+    for tentativa in range(4):
+        try:
+            resposta = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=max_tokens,
             )
+            return resposta.choices[0].message.content
+        except Exception as e:
+            _tratar_erro_openai(str(e), tentativa, 4)
+    raise Exception("Falha após 4 tentativas.")
 
-        estado = status_data["status"]
-        print(f"   [{tentativa * 10}s] Status: {estado}")
 
-        if estado == "completed":
-            video_url   = status_data["video_url"]
-            video_bytes = requests.get(video_url, timeout=300).content
-            with open(caminho_saida, "wb") as f:
-                f.write(video_bytes)
-            print(f"   Video salvo em: {caminho_saida}")
-            return
+def _validar_saida(texto: str, profile: dict) -> str:
+    """Avisa (não falha) se a saída contiver vocabulário proibido."""
+    proibidos = profile.get("vocabulario_proibido", [])
+    encontrados = [p for p in proibidos if p.lower() in texto.lower()]
+    if encontrados:
+        print(
+            f"   ⚠️  AVISO: saída contém termos proibidos para "
+            f"{profile['nome_curso']}: {encontrados}"
+        )
+    return texto
 
-        elif estado == "failed":
-            raise Exception(
-                f"HeyGen falhou durante a renderizacao: {status_data.get('error')}\n"
-                f"   video_id preservado em: {caminho_vid_id}"
-            )
 
-        elif estado not in ("processing", "pending", "waiting"):
-            raise Exception(f"HeyGen retornou status inesperado: {estado}")
+# ============================================================
+# HELPERS DE CONTEXTO E REGRAS
+# ============================================================
+
+def _bloco_contexto_area(profile: dict) -> str:
+    lei = profile.get("lei_exercicio") or "não aplicável"
+    return f"""CURSO: {profile['nome_curso']}
+ÁREA DE FORMAÇÃO: {profile['nome_area']}
+NOME DO PROFISSIONAL FORMADO: {profile['nome_profissional']}
+AMBIENTES DE TRABALHO TÍPICOS: {', '.join(profile['ambientes_de_trabalho'])}
+EQUIPAMENTOS / MATERIAIS TÍPICOS: {', '.join(profile['equipamentos_tipicos'])}
+NORMAS REGULAMENTADORAS APLICÁVEIS: {', '.join(profile['normas_regulamentadoras']) or 'não aplicáveis'}
+NORMAS TÉCNICAS APLICÁVEIS: {', '.join(profile['normas_tecnicas']) or 'não aplicáveis'}
+CONSELHO DE CLASSE: {profile.get('conselho_classe') or 'não aplicável'}
+LEI DE EXERCÍCIO PROFISSIONAL: {lei}
+GRANDEZAS / PARÂMETROS TÍPICOS: {profile['grandezas_tipicas']}
+EPIs / PROTEÇÕES TÍPICAS: {profile['epis_tipicos'] or 'não aplicáveis'}
+PROCEDIMENTOS DE SEGURANÇA CHAVE: {profile['procedimentos_seguranca_chave']}
+TECNOLOGIAS EMERGENTES: {profile['tecnologias_emergentes']}
+SOFTWARES / SISTEMAS TÍPICOS: {profile['softwares_tipicos']}"""
+
+
+def _bloco_regras(profile: dict) -> str:
+    lei = profile.get("lei_exercicio") or "não aplicável"
+    ambientes = ", ".join(profile["ambientes_de_trabalho"][:4])
+    nome_curso = profile["nome_curso"]
+
+    proibido_lista = ""
+    if profile.get("vocabulario_proibido"):
+        itens = "\n".join(f"{i+1}. {t}" for i, t in enumerate(profile["vocabulario_proibido"]))
+        proibido_lista = (
+            f"VOCABULÁRIO PROIBIDO — NÃO use em hipótese alguma, em nenhuma "
+            f"seção, nem como exemplo, nem entre parênteses:\n{itens}"
+        )
+
+    refs_lista = ""
+    if profile.get("referencias_oficiais_obrigatorias"):
+        itens = "\n".join(f"{i+1}. {r}" for i, r in enumerate(profile["referencias_oficiais_obrigatorias"]))
+        refs_lista = f"REFERÊNCIAS OFICIAIS QUE DEVEM SER CITADAS quando o tópico permitir:\n{itens}"
+
+    proibido_inline = ", ".join(profile.get("vocabulario_proibido", []))
+
+    return f"""======================================================
+RESTRIÇÕES INVIOLÁVEIS DESTE DOCUMENTO
+======================================================
+
+ESTE MATERIAL É EXCLUSIVO DO CURSO: **{nome_curso}**.
+
+Sempre que precisar mencionar o nome do curso, use exatamente "{nome_curso}".
+NUNCA cite outros cursos técnicos (Enfermagem, Administração, Eletromecânica, etc.)
+exceto o curso indicado acima.
+
+Se você violar qualquer item desta lista, o documento é REJEITADO automaticamente.
+
+{proibido_lista}
+
+{refs_lista}
+
+A área desta apostila é {profile['nome_area']}.
+O profissional formado é {profile['nome_profissional']}.
+Os ambientes de trabalho típicos são: {ambientes}.
+O conselho de classe é {profile.get('conselho_classe') or 'não aplicável'}.
+A lei de exercício profissional é {lei}.
+
+NUNCA mencione nenhum dos termos da lista de vocabulário proibido acima: {proibido_inline}.
+
+======================================================"""
+
+
+# ============================================================
+# GERADORES DE SEÇÕES GLOBAIS (recebem profile já resolvido)
+# ============================================================
+
+def _gerar_introducao(client, disciplina, ementa, contexto, profile):
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+    ambientes_lista = "\n".join(f"- {a}" for a in profile["ambientes_de_trabalho"])
+    normas_reg = ", ".join(profile["normas_regulamentadoras"]) or "não aplicáveis"
+    normas_tec = ", ".join(profile["normas_tecnicas"]) or "não aplicáveis"
+    nome_curso = profile["nome_curso"]
+
+    prompt = f"""Você é uma IA especialista sênior em geração de apostilas técnicas profissionalizantes para o curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+EMENTA: {ementa}
+CONTEXTO COMPLEMENTAR: {contexto}
+
+Gere a INTRODUÇÃO COMPLETA E EXPANDIDA da disciplina {disciplina} para uma apostila técnica profissional do curso {nome_curso}.
+
+REGRAS OBRIGATÓRIAS:
+- O conteúdo deve ter entre 2.500 e 3.500 palavras (5 a 7 páginas A4).
+- Use Markdown estruturado: títulos (##, ###), tabelas quando úteis, negrito para conceitos-chave.
+- Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
+- Nunca compacte seções. Desenvolva cada bloco com profundidade real.
+- Sempre que se referir ao curso, use o nome EXATO: "{nome_curso}".
+- Use segmentação visual: subtítulos claros; evite blocos corridos de mais de 4 parágrafos.
+- Onde pertinente, insira marcadores **[FIGURA: descrição detalhada]**.
+
+Use exatamente esta estrutura:
+
+## Apresentação da Disciplina
+Contextualize amplamente a disciplina {disciplina} dentro do curso {nome_curso}. Explique o papel central desta disciplina na construção do perfil do {profile['nome_profissional']}. Mínimo de 400 palavras.
+
+## Origem e Evolução Histórica
+Trace a história da {disciplina} desde suas origens até o estado atual. Cite marcos, pesquisadores, normas e eventos. Explique como as práticas na área de {profile['nome_area']} evoluíram. Mínimo de 600 palavras.
+
+## Relevância para a Prática Profissional
+Explique por que esta disciplina é fundamental para o {profile['nome_profissional']}. Mostre o impacto direto na atuação em ambientes como: {', '.join(profile['ambientes_de_trabalho'][:4])}. Mínimo de 500 palavras.
+
+## Integração Curricular e Interdisciplinaridade
+Mostre como {disciplina} se conecta com as demais disciplinas do curso {nome_curso}. Mínimo de 400 palavras.
+
+## O Curso Técnico e o Mercado de Trabalho
+Situe {disciplina} no contexto da área de {profile['nome_area']}, abordando os principais ambientes de atuação:
+{ambientes_lista}
+
+Explique como normas regulamentadoras ({normas_reg}), normas técnicas ({normas_tec}), exigências do {profile.get('conselho_classe') or 'mercado'} e as demandas do mercado influenciam a prática desta disciplina. Mínimo de 400 palavras.
+
+## Guia de Estudo e Uso desta Apostila
+Descreva o percurso de aprendizagem, competências, desafios e orientações práticas. Mínimo de 300 palavras.
+"""
+    return _validar_saida(_chamar_api(client, prompt, max_tokens=16000), profile)
+
+
+def _gerar_objetivos(client, disciplina, ementa, contexto, profile):
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+    nome_curso = profile["nome_curso"]
+
+    prompt = f"""Você é uma IA especialista sênior em engenharia pedagógica e currículo para o curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+EMENTA: {ementa}
+CONTEXTO COMPLEMENTAR: {contexto}
+
+Gere os OBJETIVOS DE APRENDIZAGEM COMPLETOS da disciplina {disciplina} para apostila do curso {nome_curso}.
+
+REGRAS OBRIGATÓRIAS:
+- 2.000 a 3.000 palavras (4 a 6 páginas A4).
+- Markdown estruturado, linguagem técnica formal em pt-BR. Sem emojis.
+- Sempre que se referir ao curso, use "{nome_curso}".
+
+Estrutura:
+
+## Objetivos Gerais da Disciplina
+5 objetivos gerais, cada um com parágrafo completo. Mínimo de 500 palavras.
+
+## Competências Técnicas a Desenvolver
+8 competências práticas específicas para o {profile['nome_profissional']} nos ambientes: {', '.join(profile['ambientes_de_trabalho'][:4])}. Mínimo de 600 palavras.
+
+## Competências Cognitivas e de Raciocínio Técnico
+5 competências cognitivas no contexto de {profile['nome_area']}. Mínimo de 400 palavras.
+
+## Competências Atitudinais e Éticas
+4 competências atitudinais. Mínimo de 300 palavras.
+
+## Perfil do Aluno ao Concluir a Disciplina
+Tabela: Competência | Nível Esperado | Aplicação Profissional. Mínimo de 300 palavras.
+"""
+    return _validar_saida(_chamar_api(client, prompt, max_tokens=16000), profile)
+
+
+def _gerar_exemplos(client, disciplina, ementa, contexto, profile):
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+    ambientes = profile["ambientes_de_trabalho"]
+    equip = ", ".join(profile["equipamentos_tipicos"][:8])
+    casos = ambientes[:5] if len(ambientes) >= 5 else ambientes + ["ambiente de trabalho profissional"] * (5 - len(ambientes))
+    nome_curso = profile["nome_curso"]
+
+    prompt = f"""Você é uma IA especialista sênior em estudos de caso profissionais do curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+EMENTA: {ementa}
+CONTEXTO COMPLEMENTAR: {contexto}
+
+Gere 5 ESTUDOS DE CASO PRÁTICOS COMENTADOS da disciplina {disciplina} para o curso {nome_curso}.
+
+REGRAS:
+- 4.000 a 5.500 palavras (8 a 11 páginas A4).
+- Markdown, linguagem técnica formal pt-BR. Sem emojis.
+- Cada caso com no mínimo 700 palavras.
+- Sempre que se referir ao curso, use "{nome_curso}".
+
+Casos cobrindo contextos distintos da área de {profile['nome_area']}:
+- Caso 1: {casos[0]}
+- Caso 2: {casos[1]}
+- Caso 3: {casos[2]}
+- Caso 4: {casos[3]}
+- Caso 5: {casos[4]}
+
+Materiais/equipamentos típicos: {equip}.
+
+Estrutura por caso:
+
+### Caso [N] — [Título]
+
+**Contexto e Descrição do Cenário**
+**Análise e Raciocínio Técnico** (com {profile['grandezas_tipicas']}, normas {', '.join(profile['normas_regulamentadoras']) or 'aplicáveis ao setor'})
+**Conduta e Execução Técnica** (EPIs: {profile['epis_tipicos'] or 'aplicáveis'}; procedimentos: {profile['procedimentos_seguranca_chave']})
+**Desfecho e Resultado**
+**Lição Profissional e Pontos Críticos**
+"""
+    return _validar_saida(_chamar_api(client, prompt, max_tokens=16000), profile)
+
+
+def _gerar_resumo(client, disciplina, ementa, contexto, profile):
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+    ambientes_resumo = ", ".join(profile["ambientes_de_trabalho"][:5])
+    nome_curso = profile["nome_curso"]
+
+    prompt = f"""Você é uma IA especialista sênior em material didático técnico do curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+EMENTA: {ementa}
+CONTEXTO COMPLEMENTAR: {contexto}
+
+Gere o RESUMO TÉCNICO COMPLETO da disciplina {disciplina} para o curso {nome_curso}.
+
+REGRAS:
+- 2.500 a 3.500 palavras (5 a 7 páginas A4).
+- Markdown estruturado, pt-BR formal. Sem emojis.
+- Sempre que se referir ao curso, use "{nome_curso}".
+
+Estrutura:
+
+## Síntese dos Fundamentos Teóricos (mín. 600 palavras)
+## Síntese das Competências Práticas (mín. 600 palavras, com checklist)
+## Pontos Críticos para a Prática Profissional (7 pontos, mín. 600 palavras)
+## Conexões com o Exercício da Profissão (mín. 400 palavras, ambientes: {ambientes_resumo})
+## Glossário Técnico da Disciplina (20 termos em tabela, mín. 500 palavras)
+"""
+    return _validar_saida(_chamar_api(client, prompt, max_tokens=16000), profile)
+
+
+def _gerar_questoes(client, disciplina, ementa, contexto, profile):
+    """Retorna (bloco_aluno, bloco_professor)."""
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+    grandezas = profile["grandezas_tipicas"]
+    nome_prof = profile["nome_profissional"]
+    nome_curso = profile["nome_curso"]
+
+    prompt = f"""Você é uma IA especialista sênior em avaliação pedagógica do curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+EMENTA: {ementa}
+CONTEXTO COMPLEMENTAR: {contexto}
+
+Gere a AVALIAÇÃO GERAL COMPLETA da disciplina {disciplina} para o curso {nome_curso}.
+
+INSTRUÇÃO CRÍTICA: separe a saída com a linha exata abaixo:
+===CADERNO_PROFESSOR===
+
+Antes do separador = CADERNO DO ALUNO (só enunciados).
+Depois do separador = CADERNO DO PROFESSOR (gabaritos e critérios).
+
+REGRAS:
+- Total 3.500 a 5.000 palavras (7 a 10 páginas A4).
+- Markdown, pt-BR formal. Sem emojis.
+- Use parâmetros numéricos ({grandezas}) onde fizer sentido.
+- Sempre que se referir ao curso, use "{nome_curso}".
+
+CADERNO DO ALUNO:
+
+## Parte I — Questões Objetivas (10 questões, A/B/C/D)
+## Parte II — Questões Dissertativas (6 questões: 2 conceituais, 2 analíticas, 2 críticas)
+## Parte III — Questões Baseadas em Casos Práticos (4 questões com cenários realistas do {nome_prof})
+
+===CADERNO_PROFESSOR===
+
+## Gabarito Comentado — Parte I (≥30 palavras por questão)
+## Critérios de Avaliação — Parte II (≥200 palavras por questão)
+## Gabarito e Comentários — Parte III (≥300 palavras por questão)
+## Competências Avaliadas nesta Prova
+"""
+    resultado = _chamar_api(client, prompt, max_tokens=16000)
+    partes = resultado.split("===CADERNO_PROFESSOR===", 1)
+    bloco_aluno = _validar_saida(partes[0].strip(), profile)
+    bloco_professor = _validar_saida(partes[1].strip(), profile) if len(partes) > 1 else ""
+    return bloco_aluno, bloco_professor
+
+
+# ============================================================
+# FUNÇÕES PÚBLICAS
+# ============================================================
+
+def gerar_topico(client, disciplina, topico, contexto, area):
+    """Gera o conteúdo completo de um tópico. `area` é obrigatório."""
+    profile = get_profile(area)
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+
+    nome_prof = profile["nome_profissional"]
+    nome_curso = profile["nome_curso"]
+    normas_reg = ", ".join(profile["normas_regulamentadoras"]) or "não aplicáveis"
+    normas_tec = ", ".join(profile["normas_tecnicas"]) or "não aplicáveis"
+    ambientes_lista = "\n".join(f"- {a}" for a in profile["ambientes_de_trabalho"])
+    grandezas = profile["grandezas_tipicas"]
+
+    prompt = f"""Você é uma IA especialista sênior em apostilas técnicas do curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+TÓPICO: {topico}
+CONTEXTO COMPLEMENTAR: {contexto}
+
+Gere o conteúdo COMPLETO do tópico "{topico}" da disciplina {disciplina} para apostila do curso {nome_curso}.
+
+REGRAS EDITORIAIS OBRIGATÓRIAS:
+- 5.000 a 7.500 palavras (10 a 15 páginas A4).
+- Markdown (##, ###, ####), tabelas, negrito para conceitos-chave.
+- **Atenção:** para alertas. **Dica do Técnico:** para boas práticas. **Revisão Rápida:** ao fim das fundamentações.
+- Checklists com - [ ] item.
+- **[FIGURA: descrição]** onde imagens devem entrar.
+- pt-BR formal, sem emojis.
+- Sempre que se referir ao curso, use "{nome_curso}".
+
+Estrutura obrigatória (13 seções):
+
+## 1. Abertura do Tópico
+Objetivos de Aprendizagem (4-6 competências) + contextualização para o {nome_prof}. Mín. 300 palavras.
+
+## 2. Fundamentação Teórica Aprofundada
+Conceitos, evolução histórica, fundamentos, normas ({normas_reg}, {normas_tec}), parâmetros ({grandezas}) com exemplo resolvido. Mín. 900 palavras.
+
+## 3. Conceitos Fundamentais
+6+ conceitos centrais, cada um com: definição técnica precisa, explicação didática, exemplo prático em {profile['nome_area']}, erro comum, consequência e prevenção. Mín. 800 palavras.
+
+## 4. Aprofundamento Técnico
+Situações especiais, exceções, critérios de decisão do {nome_prof}, sinais de alerta, riscos, conexões com outros tópicos. Aborde tecnologias: {profile['tecnologias_emergentes']}; softwares: {profile['softwares_tipicos']}; segurança: {profile['procedimentos_seguranca_chave']}. Mín. 700 palavras.
+
+## 5. Aplicação Prática Profissional
+Como o {nome_prof} usa este conteúdo em pelo menos 3 ambientes distintos:
+{ambientes_lista}
+Mín. 800 palavras.
+
+## 6. Procedimentos, Protocolos e Boas Práticas
+Checklist passo a passo (- [ ] item) com EPIs ({profile['epis_tipicos'] or 'não aplicáveis'}), normas ({normas_reg}), procedimentos ({profile['procedimentos_seguranca_chave']}). Mín. 700 palavras.
+
+## 7. Segurança, Ética e Responsabilidade Profissional
+Riscos, postura ética, responsabilidade técnica/legal ({profile.get('conselho_classe') or 'aplicável ao setor'}), limites de atuação. Mín. 500 palavras.
+
+## 8. Estudos de Caso Comentados
+2 casos completos com Cenário, Situação-problema, Dados, Decisão esperada, Conduta correta, Erro comum, Consequência, Raciocínio, Lição. Mín. 600 palavras.
+
+## 9. Erros Comuns e Como Evitar
+6 erros desenvolvidos. Mín. 500 palavras.
+
+## 10. Integração com Outros Tópicos e Disciplinas
+Conexões dentro de {disciplina} e com outras disciplinas do curso {nome_curso}. Mín. 300 palavras.
+
+## 11. Resumo Técnico do Tópico
+Quadro de Revisão Rápida. 200-300 palavras.
+
+## 12. Glossário do Tópico
+10 termos com definição, explicação didática, exemplo em {profile['nome_area']}, cuidado/erro comum. Mín. 400 palavras.
+
+## 13. Carreira e Empregabilidade
+Segmentos ({', '.join(profile['ambientes_de_trabalho'][:4])}), cargos, certificações ({normas_reg}, {profile.get('conselho_classe') or ''}), dicas, tendências: {profile['tecnologias_emergentes']}. Mín. 250 palavras.
+"""
+    return _validar_saida(_chamar_api(client, prompt, max_tokens=16000), profile)
+
+
+def gerar_questoes_topico(client, disciplina, topico, contexto, area):
+    """Retorna (bloco_aluno, bloco_professor). `area` é obrigatório."""
+    profile = get_profile(area)
+    ctx = _bloco_contexto_area(profile)
+    regras = _bloco_regras(profile)
+    grandezas = profile["grandezas_tipicas"]
+    nome_prof = profile["nome_profissional"]
+    nome_curso = profile["nome_curso"]
+
+    prompt = f"""Você é uma IA especialista sênior em avaliação pedagógica do curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+TÓPICO: {topico}
+CONTEXTO COMPLEMENTAR: {contexto}
+
+Gere PERGUNTAS E EXERCÍCIOS do tópico "{topico}" da disciplina {disciplina} para o curso {nome_curso}.
+
+INSTRUÇÃO CRÍTICA: separe com a linha exata:
+===CADERNO_PROFESSOR===
+
+Antes = CADERNO DO ALUNO (enunciados). Depois = CADERNO DO PROFESSOR (gabarito).
+
+REGRAS:
+- Total 500 a 700 palavras (1 página A4).
+- Markdown, pt-BR formal, sem emojis.
+- Use parâmetros numéricos ({grandezas}) onde fizer sentido.
+- Sempre que se referir ao curso, use "{nome_curso}".
+
+CADERNO DO ALUNO:
+
+### Questoes Objetivas
+5 questões A/B/C/D.
+
+Q1. [Enunciado]
+A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
+
+(Q2 a Q5 no mesmo formato)
+
+### Questoes Dissertativas
+3 questões dissertativas para situações reais do {nome_prof}.
+
+D1. [Enunciado]
+D2. [Enunciado]
+D3. [Enunciado]
+
+### Questoes Baseadas em Caso Pratico
+2 cenários realistas da área de {profile['nome_area']}.
+
+CP1. [Cenário e enunciado]
+CP2. [Cenário e enunciado]
+
+===CADERNO_PROFESSOR===
+
+### Gabarito e Criterios de Avaliacao
+
+**Gabarito objetivas:** Q1-[letra] | Q2-[letra] | Q3-[letra] | Q4-[letra] | Q5-[letra]
+**Comentário das respostas objetivas:** explique cada uma.
+**Critérios D1, D2, D3, CP1, CP2:** pontos essenciais.
+**Competências avaliadas:** [lista]
+"""
+    resultado = _chamar_api(client, prompt, max_tokens=4000)
+    partes = resultado.split("===CADERNO_PROFESSOR===", 1)
+    bloco_aluno = _validar_saida(partes[0].strip(), profile)
+    bloco_professor = _validar_saida(partes[1].strip(), profile) if len(partes) > 1 else ""
+    return bloco_aluno, bloco_professor
+
+
+def gerar_documento(client, disciplina, ementa, conteudo, contexto, area):
+    """Roteador. `area` é obrigatório."""
+    profile = get_profile(area)
+    instrucao = conteudo.lower()
+
+    if "introdução" in instrucao or "introducao" in instrucao:
+        return _gerar_introducao(client, disciplina, ementa, contexto, profile)
+    elif "objetivo" in instrucao:
+        return _gerar_objetivos(client, disciplina, ementa, contexto, profile)
+    elif "exemplo" in instrucao or "caso" in instrucao or "prático" in instrucao:
+        return _gerar_exemplos(client, disciplina, ementa, contexto, profile)
+    elif "resumo" in instrucao or "síntese" in instrucao:
+        return _gerar_resumo(client, disciplina, ementa, contexto, profile)
+    elif "questão" in instrucao or "quest" in instrucao or "dissertat" in instrucao or "avaliação" in instrucao:
+        return _gerar_questoes(client, disciplina, ementa, contexto, profile)
+    else:
+        ctx = _bloco_contexto_area(profile)
+        regras = _bloco_regras(profile)
+        nome_curso = profile["nome_curso"]
+        prompt = f"""Você é uma IA especialista sênior em material didático do curso {nome_curso}.
+
+{ctx}
+
+{regras}
+
+DISCIPLINA: {disciplina}
+EMENTA: {ementa}
+INSTRUÇÃO: {conteudo}
+CONTEXTO: {contexto}
+
+Gere 2.000 a 3.000 palavras. Markdown, pt-BR formal, sem emojis.
+Orientado ao curso {nome_curso}, com exemplos em {', '.join(profile['ambientes_de_trabalho'][:3])} e situações reais do {profile['nome_profissional']}.
+"""
+        return _validar_saida(_chamar_api(client, prompt, max_tokens=16000), profile)
