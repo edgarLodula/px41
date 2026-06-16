@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 
 from src.video_generator.roteiro_generator import gerar_roteiro
 from src.video_generator.video_generator import gerar_video
+from src.video_generator.gerador_videos_direto import gerar_video_heygen, aguardar_video, extrair_falas_do_roteiro, parsear_cenas_do_roteiro
+
 
 _BASE_MD = (
     r"data\output\markdown"

@@ -1,15 +1,16 @@
 import json
 import os
 import re
-from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-FONTE_PATH       = "C:/Windows/Fonts/arial.ttf"
-FONTE_BOLD_PATH  = "C:/Windows/Fonts/arialbd.ttf"
-BG_COLOR         = (26, 39, 68)
-TEXT_COLOR       = (255, 255, 255)
-ACCENT_COLOR     = (100, 150, 255)
-SUBTITLE_COLOR   = (140, 160, 200)
-MARCADOR         = "▸"
+FONTE_PATH       = "assets/fonts/Roboto-Regular.ttf"     # fonte bundled
+FONTE_BOLD_PATH  = "assets/fonts/Fredericka-the-Great.ttf" # título estilo giz
+BG_COLOR         = (26, 42, 26)       # verde lousa escuro
+TEXT_COLOR       = (232, 232, 208)    # branco giz (levemente amarelado)
+ACCENT_COLOR     = (255, 235, 59)     # amarelo giz
+SUBTITLE_COLOR   = (180, 180, 155)    # giz apagado
+MARCADOR         = "▸"    
 
 TIPO_LISTA        = "lista"
 TIPO_ABERTURA     = "abertura"
@@ -441,8 +442,19 @@ def _gerar_slide_cena(cena, caminho_saida, disciplina, conteudo=None, numero=1, 
     area_w = int(largura * 0.58)
     x0, x_max = 70, area_w - 30
 
-    img  = Image.new("RGB", (largura, altura), BG_COLOR)
+        # Fundo lousa com textura de giz
+    img = Image.new("RGB", (largura, altura), BG_COLOR)
+    noise = np.random.randint(0, 12, (altura // 4, largura // 4), dtype=np.uint8)
+    noise_img = Image.fromarray(noise, mode='L')
+    noise_img = noise_img.resize((largura, altura), Image.NEAREST)
+    noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=1))
+    noise_rgb = noise_img.convert("RGB")
+    img = Image.blend(img, noise_rgb, alpha=0.10)
     draw = ImageDraw.Draw(img)
+
+
+    draw = ImageDraw.Draw(img)
+
 
     titulo, topicos, destaque = _extrair_conteudo(cena, conteudo, disciplina)
     tipo = _detectar_tipo(cena, conteudo, numero - 1, total)

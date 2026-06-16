@@ -1,11 +1,145 @@
 import os
+import re
 import time
+
+import requests
 from openai import OpenAI
 
 from src.content_generation.area_profiles import get_profile
 
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+
+# ============================================================
+# PIPELINE DE VÍDEO (roteiro Bloco/[AVATAR] → slides → HeyGen)
+# ============================================================
+
+def _parsear_roteiro_blocos(roteiro: str) -> list:
+    """
+    Converte roteiro no formato 'Bloco N: título' + marcadores [AVATAR]/[VISUAL/B-ROLL]/
+    [TEXTO NA TELA] em lista de cenas {fala, visual, texto} compatível com gerar_slides.
+    """
+    cenas = []
+    fala_p, visual_p, texto_p = [], [], []
+
+    def _salvar_cena():
+        if fala_p or visual_p or texto_p:
+            cenas.append({
+                "fala":   " ".join(fala_p).strip(),
+                "visual": " ".join(visual_p).strip(),
+                "texto":  " ".join(texto_p).strip(),
+            })
+        fala_p.clear(); visual_p.clear(); texto_p.clear()
+
+    linhas = roteiro.splitlines()
+    i = 0
+    while i < len(linhas):
+        ls = linhas[i].strip()
+
+        if re.match(r'^Bloco\s+\d+[:\s]', ls):
+            _salvar_cena()
+
+        elif ls.upper().startswith("[AVATAR]"):
+            # Fala pode estar na mesma linha ou entre aspas na(s) linha(s) seguinte(s)
+            inline = re.sub(r'^\[AVATAR\]\s*(\([^)]*\))?\s*', '', ls, flags=re.IGNORECASE).strip().strip('"')
+            if inline:
+                fala_p.append(inline)
+            else:
+                i += 1
+                while i < len(linhas):
+                    prox = linhas[i].strip()
+                    if prox.startswith("["):
+                        i -= 1
+                        break
+                    limpo = prox.strip('"').strip()
+                    if limpo and not limpo.startswith("("):
+                        fala_p.append(limpo)
+                    elif not limpo:
+                        break
+                    i += 1
+
+        elif re.match(r'^\[VISUAL', ls, re.IGNORECASE) or re.match(r'^\[B-ROLL', ls, re.IGNORECASE):
+            desc = re.sub(r'^\[[^\]]+\]\s*', '', ls).strip("() ")
+            if desc:
+                visual_p.append(desc)
+
+        elif ls.upper().startswith("[TEXTO NA TELA]"):
+            txt = ls[len("[TEXTO NA TELA]"):].strip().strip("() ")
+            if txt:
+                texto_p.append(txt)
+
+        i += 1
+
+    _salvar_cena()
+    return cenas or [{"fala": roteiro[:500], "visual": "", "texto": ""}]
+
+
+def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina: str):
+    """
+    Orquestra a pipeline completa para um vídeo:
+      roteiro (formato Bloco/[AVATAR]) → slides PNG → upload HeyGen → vídeo multi-cenas → mp4.
+
+    Variáveis de ambiente necessárias:
+      HEYGEN_API_KEY, HEYGEN_AVATAR_ID, HEYGEN_VOICE_ID
+    """
+    from src.video_generator.slides_generator import gerar_slides
+    from src.video_generator.gerador_videos_direto import (
+        _upload_slide_heygen, gerar_video_heygen_scenes, aguardar_video,
+    )
+
+    heygen_token = os.getenv("HEYGEN_API_KEY")
+    if not heygen_token:
+        raise ValueError("HEYGEN_API_KEY não configurada.")
+
+    # 1. Parsear roteiro → cenas
+    cenas = _parsear_roteiro_blocos(roteiro)
+
+    # 2. Gerar slides e coletar caminhos
+    print(f"   Gerando {len(cenas)} slide(s) em: {pasta_slides}")
+    caminhos_slides = gerar_slides(cenas, pasta_slides, disciplina)
+
+    # 3. Upload de cada slide para o HeyGen; fallback para fundo sólido se falhar
+    print(f"   Fazendo upload de {len(caminhos_slides)} slide(s) para HeyGen...")
+    cenas_com_slides = []
+    for cena, caminho_slide in zip(cenas, caminhos_slides):
+        fala = cena.get("fala", "").strip()
+        if not fala:
+            continue
+        try:
+            asset_id = _upload_slide_heygen(caminho_slide, heygen_token)
+            print(f"      {os.path.basename(caminho_slide)} → asset_id: {asset_id}")
+        except Exception as e:
+            print(f"      [AVISO] Upload falhou ({e}). Cena usará fundo sólido.")
+            asset_id = None
+        cenas_com_slides.append({"fala": fala, "asset_id": asset_id})
+
+    if not cenas_com_slides:
+        raise ValueError("Nenhuma cena com fala encontrada no roteiro.")
+
+    # 4. Enviar para HeyGen como vídeo multi-cenas
+    print(f"   Enviando {len(cenas_com_slides)} cena(s) para HeyGen...")
+    video_id = gerar_video_heygen_scenes(cenas_com_slides, disciplina, heygen_token)
+
+    # 5. Aguardar processamento
+    print(f"   Aguardando processamento (video_id: {video_id})...")
+    info = aguardar_video(video_id, heygen_token)
+
+    video_url = info.get("video_url")
+    if not video_url:
+        raise RuntimeError(f"HeyGen concluiu sem video_url. Resposta: {info}")
+
+    # 6. Baixar vídeo
+    pasta_video = os.path.dirname(caminho_saida)
+    if pasta_video:
+        os.makedirs(pasta_video, exist_ok=True)
+
+    print(f"   Baixando vídeo: {video_url}")
+    resp = requests.get(video_url, timeout=120)
+    resp.raise_for_status()
+    with open(caminho_saida, "wb") as f:
+        f.write(resp.content)
+    print(f"   Vídeo salvo: {caminho_saida} ({len(resp.content) // 1024} KB)")
 
 
 def configurar_openai():

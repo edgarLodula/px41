@@ -385,17 +385,21 @@ def gerar_video_heygen(
     }
 
     payload = {
-        "type":         "avatar",
-        "avatar_id":    avatar_id,
-        "voice_id":     voice_id,
-        "script":       roteiro if not LIMITE_PALAVRAS else _truncar_palavras(roteiro, LIMITE_PALAVRAS),
-        "title":        f"Introdução — {disciplina}",
+        "type": "avatar",
+        "avatar_id": avatar_id,
+        "voice_id": voice_id,
+        "script": roteiro if not LIMITE_PALAVRAS else _truncar_palavras(roteiro, LIMITE_PALAVRAS),
+        "title": f"Introdução — {disciplina}",
         "aspect_ratio": HEYGEN_ASPECT_RATIO,
-        "fit":          "contain",
-        "engine":       {"type": HEYGEN_ENGINE},
+        "fit": "contain",
+        "engine": {"type": HEYGEN_ENGINE},
         "voice_settings": {"speed": HEYGEN_SPEED},
         "expressiveness": HEYGEN_EXPRESSIVENESS,
-        "motion_prompt":  HEYGEN_MOTION_PROMPT,
+        "motion_prompt": (
+            "enthusiastic teacher, natural hand gestures, pointing at board, "
+            "head nodding while explaining, occasional eyebrow raise "
+            "for emphasis, calm and professional posture"
+        ),
         "background": (
             {"type": "image", "asset_id": HEYGEN_BG_ASSET_ID}
             if HEYGEN_BG_ASSET_ID
@@ -450,9 +454,9 @@ def verificar_status_video(video_id: str, heygen_token: str) -> dict:
     }
 
 
-def aguardar_video(video_id: str, heygen_token: str, max_min: int = 10) -> dict:
+def aguardar_video(video_id: str, heygen_token: str, max_min: int = 1.0) -> dict:
     """Polling até completed/failed. Aguarda até max_min minutos."""
-    tentativas = (max_min * 60) // 10
+    tentativas = int((max_min * 60) // 10)
     for _ in range(tentativas):
         info = verificar_status_video(video_id, heygen_token)
         if info["status"] == "completed":
@@ -461,6 +465,116 @@ def aguardar_video(video_id: str, heygen_token: str, max_min: int = 10) -> dict:
             raise RuntimeError(f"HeyGen falhou. Resposta completa: {info}")
         time.sleep(10)
     raise TimeoutError(f"Vídeo não ficou pronto em {max_min} minutos.")
+
+
+def _upload_slide_heygen(caminho_slide: str, heygen_token: str) -> str:
+    """
+    Faz upload de um slide PNG para o HeyGen e retorna o asset_id.
+    Usado como background image em cada cena do vídeo.
+    """
+    nome_arquivo = os.path.basename(caminho_slide)
+    with open(caminho_slide, "rb") as f:
+        resp = requests.post(
+            f"{HEYGEN_BASE_URL}/v3/assets",
+            headers={"X-Api-Key": heygen_token},
+            files={"file": (nome_arquivo, f, "image/png")},
+            timeout=60,
+        )
+    if not resp.ok:
+        raise RuntimeError(
+            f"Upload slide falhou ({nome_arquivo}): "
+            f"HTTP {resp.status_code} — {resp.text[:300]}"
+        )
+    data = resp.json().get("data", {})
+    asset_id = data.get("asset_id")
+    if not asset_id:
+        raise RuntimeError(f"HeyGen não retornou asset_id: {resp.text[:300]}")
+    return asset_id
+
+
+def gerar_video_heygen_scenes(
+    cenas: list[dict],
+    disciplina: str,
+    heygen_token: str,
+    avatar_id: str | None = None,
+    voice_id: str | None = None,
+) -> str:
+    """
+    Cria vídeo multi-cenas no HeyGen (v2 Studio API).
+    Cada cena = slide de fundo + avatar à direita + fala.
+
+    cenas: [{"fala": "...", "asset_id": "..."}, ...]
+    """
+    avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID")
+    voice_id = voice_id or os.getenv("HEYGEN_VOICE_ID")
+
+    if not avatar_id:
+        raise ValueError("HEYGEN_AVATAR_ID não configurado.")
+    if not voice_id:
+        raise ValueError("HEYGEN_VOICE_ID não configurado.")
+
+    video_inputs = []
+    for cena in cenas:
+        scene = {
+            "character": {
+                "type": "talking_photo",
+                "talking_photo_id": avatar_id,
+                "scale": 0.45,
+                "offset": {"x": 0.5, "y": 0.0},
+                "talking_photo_style": "square",
+                "talking_style": "expressive",
+            },
+            "voice": {
+                "type": "text",
+                "voice_id": voice_id,
+                "input_text": cena["fala"],
+            },
+        }
+
+        if cena.get("asset_id"):
+            scene["background"] = {
+                "type": "image",
+                "image_asset_id": cena["asset_id"],
+            }
+        else:
+            scene["background"] = {
+                "type": "color",
+                "value": HEYGEN_BG_COLOR,
+            }
+
+        video_inputs.append(scene)
+
+    headers = {
+        "X-Api-Key": heygen_token,
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "video_inputs": video_inputs,
+        "title": f"Introdução — {disciplina}",
+        "dimension": {"width": 1280, "height": 720},
+        "caption": False,
+    }
+
+    resp = requests.post(
+        f"{HEYGEN_BASE_URL}/v2/video/generate",
+        headers=headers,
+        json=payload,
+        timeout=30,
+    )
+
+    if not resp.ok:
+        raise RuntimeError(
+            f"HeyGen /v2/video/generate falhou: "
+            f"HTTP {resp.status_code} — {resp.text[:300]}"
+        )
+
+    data = resp.json().get("data", {})
+    video_id = data.get("video_id")
+    if not video_id:
+        raise RuntimeError(f"HeyGen não retornou video_id: {resp.text[:300]}")
+
+    return video_id
 
 
 # =============================================================================
