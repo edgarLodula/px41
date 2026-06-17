@@ -392,14 +392,16 @@ def gerar_video_heygen(
         "title": f"Introdução — {disciplina}",
         "aspect_ratio": HEYGEN_ASPECT_RATIO,
         "fit": "contain",
-        "engine": {"type": HEYGEN_ENGINE},
         "voice_settings": {"speed": HEYGEN_SPEED},
-        "expressiveness": HEYGEN_EXPRESSIVENESS,
         "motion_prompt": (
-            "enthusiastic teacher, natural hand gestures, pointing at board, "
-            "head nodding while explaining, occasional eyebrow raise "
-            "for emphasis, calm and professional posture"
+            "enthusiastic teacher explaining to students, "
+            "natural hand gestures, pointing at content on a board, "
+            "head nodding while explaining key concepts, "
+            "arms gesturing at chest level, "
+            "lean slightly forward when making important points"
         ),
+        "expressiveness": "medium",   # Avatar IV: low | medium | high
+        "engine": {"type": "avatar_iv"},
         "background": (
             {"type": "image", "asset_id": HEYGEN_BG_ASSET_ID}
             if HEYGEN_BG_ASSET_ID
@@ -492,6 +494,40 @@ def _upload_slide_heygen(caminho_slide: str, heygen_token: str) -> str:
     return asset_id
 
 
+def _enviar_video_generate_com_retry(headers: dict, payload: dict, max_espera_min: int = 10):
+    """
+    POST /v2/video/generate com retry específico para o erro
+    'Avatar ... is still processing' (avatar customizado ainda em criação no HeyGen).
+    Outros erros HTTP são propagados imediatamente.
+    """
+    tentativas = max(1, (max_espera_min * 60) // 20)
+    for tentativa in range(tentativas):
+        resp = requests.post(
+            f"{HEYGEN_BASE_URL}/v2/video/generate",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        if resp.ok:
+            return resp
+        if resp.status_code == 400 and "still processing" in resp.text.lower():
+            print(
+                f"   [AVISO] Avatar ainda em processamento no HeyGen. "
+                f"Aguardando 20s antes de tentar novamente... ({tentativa + 1}/{tentativas})"
+            )
+            time.sleep(20)
+            continue
+        raise RuntimeError(
+            f"HeyGen /v2/video/generate falhou: "
+            f"HTTP {resp.status_code} — {resp.text[:300]}"
+        )
+
+    raise RuntimeError(
+        f"Avatar ainda em processamento no HeyGen após {max_espera_min} min de espera. "
+        "Aguarde a criação do avatar terminar (verifique no painel HeyGen) e tente novamente."
+    )
+
+
 def gerar_video_heygen_scenes(
     cenas: list[dict],
     disciplina: str,
@@ -522,7 +558,7 @@ def gerar_video_heygen_scenes(
                 "scale": 0.45,
                 "offset": {"x": 0.5, "y": 0.0},
                 "talking_photo_style": "square",
-                "talking_style": "expressive",
+                
             },
             "voice": {
                 "type": "text",
@@ -556,18 +592,7 @@ def gerar_video_heygen_scenes(
         "caption": False,
     }
 
-    resp = requests.post(
-        f"{HEYGEN_BASE_URL}/v2/video/generate",
-        headers=headers,
-        json=payload,
-        timeout=30,
-    )
-
-    if not resp.ok:
-        raise RuntimeError(
-            f"HeyGen /v2/video/generate falhou: "
-            f"HTTP {resp.status_code} — {resp.text[:300]}"
-        )
+    resp = _enviar_video_generate_com_retry(headers, payload)
 
     data = resp.json().get("data", {})
     video_id = data.get("video_id")

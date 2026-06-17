@@ -1,286 +1,163 @@
-AREA_PROFILES = {
-    "tecnico_enfermagem": {
-        "nome_curso": "Técnico em Enfermagem",
-        "nome_area": "saúde",
-        "nome_profissional": "técnico em enfermagem",
-        "ambientes_de_trabalho": [
-            "enfermaria / unidade de internação hospitalar",
-            "UTI (unidade de terapia intensiva)",
-            "pronto-socorro / emergência",
-            "centro cirúrgico",
-            "UBS / atenção básica",
-            "home care",
-            "CME (central de material e esterilização)"
-        ],
-        "equipamentos_tipicos": [
-            "esfigmomanômetro", "estetoscópio", "oxímetro",
-            "monitor multiparamétrico", "bomba de infusão",
-            "glicosímetro", "termômetro digital", "carro de emergência"
-        ],
-        "normas_regulamentadoras": ["NR-32", "NR-6"],
-        "normas_tecnicas": ["COFEN", "ANVISA", "Ministério da Saúde"],
-        "conselho_classe": "COFEN / COREN",
-        "lei_exercicio": "Lei 7.498/1986",
-        "grandezas_tipicas": [
-            "PA", "FC", "FR", "T", "SpO2",
-            "dor", "balanço hídrico", "Glasgow", "Braden", "Morse"
-        ],
-        "tecnologias_emergentes": [
-            "prontuário eletrônico (PEP)", "telemedicina",
-            "monitoramento remoto", "SAE digital"
-        ],
-        "softwares_tipicos": ["e-SUS APS", "sistemas hospitalares", "PNI SI-PNI"],
-        "epis_tipicos": [
-            "luvas", "máscara cirúrgica", "N95/PFF2",
-            "aventais", "óculos de proteção", "gorro"
-        ],
-        "procedimentos_seguranca_chave": [
-            "5 momentos da higienização das mãos",
-            "9 certos da medicação",
-            "precauções padrão",
-            "segurança do paciente",
-            "descarte de perfurocortantes"
-        ],
-        "vocabulario_proibido": [
-            "motor", "CLP", "inversor", "fábrica", "subestação",
-            "compressor", "redutor", "curso industrial",
-            "técnico em administração", "técnico em eletromecânica",
-            "técnico em eletrotécnica", "curso técnico de administração",
-            "curso técnico de gestão", "curso técnico industrial"
-        ],
-        "referencias_oficiais_obrigatorias": [
-            "https://www.gov.br/saude",
-            "https://www.cofen.gov.br",
-            "https://www.gov.br/anvisa"
-        ]
-    },
-
-    "tecnico_administracao": {
-        "nome_curso": "Técnico em Administração",
-        "nome_area": "administração",
-        "nome_profissional": "técnico em administração",
-        "ambientes_de_trabalho": [
-            "escritórios corporativos",
-            "setor financeiro",
-            "departamento de recursos humanos",
-            "setor de estoque e logística",
-            "departamento comercial e de vendas",
-            "controladoria"
-        ],
-        "equipamentos_tipicos": [
-            "computador", "planilhas eletrônicas",
-            "sistemas ERP", "impressora", "softwares de gestão"
-        ],
-        "normas_regulamentadoras": [],
-        "normas_tecnicas": ["legislação empresarial", "normas contábeis"],
-        "conselho_classe": "CRA (Conselho Regional de Administração)",
-        "lei_exercicio": "Lei 4.769/1965",
-        "grandezas_tipicas": [
-            "fluxo de caixa", "lucro", "custo", "receita",
-            "estoque", "KPIs", "indicadores de desempenho",
-            "margem de contribuição", "ROI"
-        ],
-        "tecnologias_emergentes": [
-            "ERP em nuvem", "automação de processos (RPA)",
-            "IA para gestão", "Business Intelligence (BI)"
-        ],
-        "softwares_tipicos": ["Excel", "ERP (TOTVS, SAP, Oracle)", "CRM"],
-        "epis_tipicos": [],
-        "procedimentos_seguranca_chave": [
-            "organização de processos administrativos",
-            "controle financeiro e orçamentário",
-            "gestão de estoque"
-        ],
-        "vocabulario_proibido": [
-            "UTI", "paciente", "enfermagem", "enfermeiro",
-            "saúde", "farmacologia", "anatomia", "fisiologia",
-            "medicação", "prontuário", "curso técnico de saúde",
-            "curso técnico de enfermagem", "técnico em enfermagem",
-            "motor", "compressor", "CLP", "fábrica",
-            "curso industrial", "técnico em eletromecânica"
-        ],
-        "referencias_oficiais_obrigatorias": []
-    },
-
-    "tecnico_eletromecanica": {
-        "nome_curso": "Técnico em Eletromecânica",
-        "nome_area": "eletromecânica industrial",
-        "nome_profissional": "técnico em eletromecânica",
-        "ambientes_de_trabalho": [
-            "manutenção industrial",
-            "chão de fábrica",
-            "oficinas mecânicas industriais",
-            "plantas produtivas"
-        ],
-        "equipamentos_tipicos": [
-            "motor elétrico", "redutor", "rolamento",
-            "bomba centrífuga", "compressor", "esteira transportadora"
-        ],
-        "normas_regulamentadoras": ["NR-10", "NR-12", "NR-35"],
-        "normas_tecnicas": ["ABNT/NBR"],
-        "conselho_classe": "CREA/CFT",
-        "lei_exercicio": "Lei 5.524/1968",
-        "grandezas_tipicas": [
-            "torque", "vibração", "rotação", "potência mecânica"
-        ],
-        "tecnologias_emergentes": [
-            "manutenção preditiva", "sensores industriais", "IoT industrial"
-        ],
-        "softwares_tipicos": ["CAD mecânico", "simuladores industriais"],
-        "epis_tipicos": [
-            "capacete", "luvas", "óculos", "protetor auricular"
-        ],
-        "procedimentos_seguranca_chave": ["LOTO", "APR", "manutenção preventiva"],
-        "vocabulario_proibido": [
-            "paciente", "UTI", "medicação", "enfermagem", "saúde",
-            "curso técnico de saúde", "curso técnico em enfermagem",
-            "técnico em administração", "curso técnico de administração"
-        ],
-        "referencias_oficiais_obrigatorias": []
-    },
-
-    "tecnico_eletrotecnica": {
-        "nome_curso": "Técnico em Eletrotécnica",
-        "nome_area": "energia elétrica",
-        "nome_profissional": "técnico em eletrotécnica",
-        "ambientes_de_trabalho": [
-            "subestações", "instalações elétricas",
-            "painéis elétricos", "redes de distribuição"
-        ],
-        "equipamentos_tipicos": [
-            "transformador", "disjuntor", "cabos elétricos",
-            "painel elétrico", "SPDA"
-        ],
-        "normas_regulamentadoras": ["NR-10", "NR-35"],
-        "normas_tecnicas": ["ABNT/NBR 5410"],
-        "conselho_classe": "CREA/CFT",
-        "lei_exercicio": "Lei 5.524/1968",
-        "grandezas_tipicas": ["tensão", "corrente", "potência", "resistência"],
-        "tecnologias_emergentes": ["smart grid", "energia solar", "automação elétrica"],
-        "softwares_tipicos": ["simulação elétrica", "CAD elétrico"],
-        "epis_tipicos": ["luvas isolantes", "capacete", "óculos"],
-        "procedimentos_seguranca_chave": [
-            "desenergização", "LOTO", "análise de risco elétrico"
-        ],
-        "vocabulario_proibido": [
-            "paciente", "medicação", "UTI", "enfermagem", "saúde",
-            "curso técnico de saúde", "curso técnico em enfermagem",
-            "técnico em administração"
-        ],
-        "referencias_oficiais_obrigatorias": []
-    },
-
-    "refrigeracao_climatizacao": {
-        "nome_curso": "Técnico em Refrigeração e Climatização",
-        "nome_area": "refrigeração e climatização (HVAC)",
-        "nome_profissional": "técnico em refrigeração e climatização",
-        "ambientes_de_trabalho": [
-            "instalações de ar-condicionado",
-            "câmaras frigoríficas",
-            "manutenção HVAC",
-            "edifícios comerciais"
-        ],
-        "equipamentos_tipicos": [
-            "compressor", "condensador", "evaporador",
-            "válvula de expansão", "fluido refrigerante"
-        ],
-        "normas_regulamentadoras": ["PMOC", "NR-10", "NR-35"],
-        "normas_tecnicas": ["ABNT NBR 16401"],
-        "conselho_classe": "CREA/CFT",
-        "lei_exercicio": "não aplicável",
-        "grandezas_tipicas": [
-            "BTU", "temperatura", "pressão",
-            "superaquecimento", "sub-resfriamento"
-        ],
-        "tecnologias_emergentes": [
-            "HVAC inteligente", "eficiência energética", "IoT climático"
-        ],
-        "softwares_tipicos": ["simulação térmica", "projeto HVAC"],
-        "epis_tipicos": ["luvas", "óculos", "máscara"],
-        "procedimentos_seguranca_chave": [
-            "manipulação de gases refrigerantes", "PMOC", "controle de pressão"
-        ],
-        "vocabulario_proibido": [
-            "paciente", "UTI", "medicação", "CLP", "enfermagem", "saúde",
-            "curso técnico de saúde", "técnico em administração"
-        ],
-        "referencias_oficiais_obrigatorias": []
-    }
-}
+import re
+from pathlib import Path
+from .area_profiles import AREA_PROFILES, _ALIASES, get_profile
 
 
-_ALIASES = {
-    "enfermagem": "tecnico_enfermagem",
-    "saúde": "tecnico_enfermagem",
-    "saude": "tecnico_enfermagem",
-    "tecnico em enfermagem": "tecnico_enfermagem",
-    "técnico em enfermagem": "tecnico_enfermagem",
-    "administracao": "tecnico_administracao",
-    "administração": "tecnico_administracao",
-    "tecnico em administracao": "tecnico_administracao",
-    "técnico em administração": "tecnico_administracao",
-    "eletromecanica": "tecnico_eletromecanica",
-    "eletromecânica": "tecnico_eletromecanica",
-    "industrial": "tecnico_eletromecanica",
-    "eletrotecnica": "tecnico_eletrotecnica",
-    "eletrotécnica": "tecnico_eletrotecnica",
-    "hvac": "refrigeracao_climatizacao",
-    "refrigeracao": "refrigeracao_climatizacao",
-    "refrigeração": "refrigeracao_climatizacao",
-    "climatizacao": "refrigeracao_climatizacao",
-    "climatização": "refrigeracao_climatizacao",
-}
+# ---------- LEITURA DE AMOSTRA (docx / pdf / txt) ----------
+
+def _ler_amostra(caminho: str, max_chars: int = 8000) -> str:
+    p = Path(caminho)
+    ext = p.suffix.lower()
+
+    if ext == ".docx":
+        import zipfile
+        from xml.etree import ElementTree as ET
+        with zipfile.ZipFile(p) as z:
+            xml = z.read("word/document.xml").decode("utf-8")
+        ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        root = ET.fromstring(xml)
+        partes = []
+        for para in root.iter(f"{ns}p"):
+            t = "".join(n.text or "" for n in para.iter(f"{ns}t"))
+            if t.strip():
+                partes.append(t)
+            if sum(len(x) for x in partes) >= max_chars:
+                break
+        return "\n".join(partes)[:max_chars]
+
+    if ext == ".pdf":
+        from pypdf import PdfReader
+        r = PdfReader(str(p))
+        texto = ""
+        for pag in r.pages[:5]:
+            texto += pag.extract_text() or ""
+            if len(texto) >= max_chars:
+                break
+        return texto[:max_chars]
+
+    return p.read_text(encoding="utf-8", errors="ignore")[:max_chars]
 
 
-def get_profile(area: str) -> dict:
-    """Retorna o perfil da área. Lança ValueError se vazio ou desconhecido."""
-    if not area or not str(area).strip():
-        raise ValueError(
-            "Área não informada. Passe explicitamente o nome da área "
-            "(ex.: 'administracao', 'enfermagem')."
-        )
+# ---------- CAMADA 1: TÍTULO ("TÉCNICO EM X") ----------
 
-    key = str(area).strip().lower()
-    key = _ALIASES.get(key, key)
+def _detectar_por_titulo(texto: str) -> str | None:
+    cabecalho = "\n".join(texto.splitlines()[:15]).lower()
+    # Captura padrões: "técnico em X", "curso técnico de X", "tecnico em X"
+    m = re.search(
+        r"(?:t[ée]cnico\s+em|curso\s+t[ée]cnico\s+(?:em|de)|t[ée]cnico\s+de)\s+"
+        r"([a-zà-ú0-9\s/&-]{3,60}?)(?:\n|$|[—–:|])",
+        cabecalho, re.IGNORECASE,
+    )
+    candidatos = []
+    if m:
+        candidatos.append(m.group(1).strip().lower())
 
-    if key not in AREA_PROFILES:
-        raise ValueError(
-            f"Área '{area}' não encontrada. Áreas disponíveis: "
-            f"{list(AREA_PROFILES.keys())}"
-        )
+    # Fallback: bate qualquer alias dentro das primeiras 15 linhas
+    candidatos.append(cabecalho)
 
-    return AREA_PROFILES[key]
+    for c in candidatos:
+        # casa aliases mais longos primeiro (evita "saude" pegar antes de "segurança")
+        for alias in sorted(_ALIASES, key=len, reverse=True):
+            if alias in c:
+                return _ALIASES[alias]
+    return None
 
 
-def detectar_area_por_nome_pdf(nome_pdf: str) -> str:
+# ---------- CAMADA 2: HEURÍSTICA POR DENSIDADE ----------
+
+def _detectar_por_conteudo_heuristico(texto: str) -> str | None:
+    texto_low = texto.lower()
+    scores = {}
+    for key, profile in AREA_PROFILES.items():
+        s = 0
+        for grupo in ("ambientes_de_trabalho", "equipamentos_tipicos",
+                      "procedimentos_seguranca_chave", "grandezas_tipicas"):
+            for termo in profile.get(grupo, []) or []:
+                kw = str(termo).split()[0].lower().strip(".,()/")
+                if len(kw) >= 5 and kw in texto_low:
+                    s += 1
+        scores[key] = s
+
+    if not scores:
+        return None
+    ordenado = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    top = ordenado[0]
+    segundo = ordenado[1] if len(ordenado) > 1 else ("", 0)
+    # confiança: pelo menos 4 acertos E ser ≥2x o segundo colocado
+    if top[1] >= 4 and top[1] >= 2 * max(segundo[1], 1):
+        return top[0]
+    return None
+
+
+# ---------- CAMADA 3: LLM (fallback final) ----------
+
+def _detectar_por_llm(client, texto: str) -> str | None:
+    descricoes = "\n".join(
+        f"- {k}: {AREA_PROFILES[k]['nome_curso']}"
+        for k in AREA_PROFILES
+    )
+    prompt = (
+        "Identifique a área desta apostila técnica. "
+        "Responda APENAS com uma destas chaves, em minúsculo, sem aspas, sem markdown, sem explicação:\n\n"
+        f"{descricoes}\n\n"
+        f"TRECHO INICIAL DA APOSTILA:\n\"\"\"\n{texto[:5000]}\n\"\"\"\n\nChave:"
+    )
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+        max_tokens=15,
+    )
+    chave = resp.choices[0].message.content.strip().lower().split()[0].strip(".,'\"`")
+    return chave if chave in AREA_PROFILES else None
+
+
+# ---------- API PÚBLICA ----------
+
+def detectar_area_do_input(
+    caminho_input: str,
+    client=None,
+    override: str | None = None,
+) -> dict:
     """
-    Detecta a chave da área a partir do nome do arquivo PDF.
-    Útil para mapear PDFs de entrada → perfil correto sem depender de .env.
-    """
-    nome = nome_pdf.lower().replace("_", " ").replace("-", " ").replace(".pdf", "")
+    Detecta automaticamente o profile a partir do conteúdo do arquivo de entrada.
+    NÃO consulta variáveis de ambiente. NÃO depende do nome do arquivo.
 
-    # Mais específico primeiro pra evitar match incorreto
-    regras_ordenadas = [
-        ("administracao", "administracao"),
-        ("administração", "administracao"),
-        ("enfermagem", "enfermagem"),
-        ("eletromecanica", "eletromecanica"),
-        ("eletromecânica", "eletromecanica"),
-        ("eletrotecnica", "eletrotecnica"),
-        ("eletrotécnica", "eletrotecnica"),
-        ("refrigeracao", "refrigeracao"),
-        ("refrigeração", "refrigeracao"),
-        ("climatizacao", "refrigeracao"),
-        ("climatização", "refrigeracao"),
-        ("hvac", "refrigeracao"),
-    ]
-    for chave, area in regras_ordenadas:
-        if chave in nome:
-            return area
+    Retorna:
+        {
+            "area_key": "oratoria",
+            "profile":  { ...dict completo... },
+            "estrategia": "titulo" | "heuristica" | "llm" | "override"
+        }
+
+    Lança ValueError se não conseguir detectar.
+    """
+    if override:
+        return {
+            "area_key": override,
+            "profile": get_profile(override),
+            "estrategia": "override",
+        }
+
+    texto = _ler_amostra(caminho_input)
+    if not texto.strip():
+        raise ValueError(f"Arquivo '{caminho_input}' está vazio ou ilegível.")
+
+    for estrategia, detector in (
+        ("titulo", lambda: _detectar_por_titulo(texto)),
+        ("heuristica", lambda: _detectar_por_conteudo_heuristico(texto)),
+        ("llm", lambda: _detectar_por_llm(client, texto) if client else None),
+    ):
+        key = detector()
+        if key:
+            return {
+                "area_key": key,
+                "profile": get_profile(key),
+                "estrategia": estrategia,
+            }
 
     raise ValueError(
-        f"Não consegui detectar a área pelo nome do PDF '{nome_pdf}'. "
-        f"Adicione uma palavra-chave reconhecida (administracao, enfermagem, "
-        f"eletromecanica, eletrotecnica, refrigeracao) ao nome do arquivo, "
-        f"ou registre manualmente em main.py via AREA_POR_PDF."
+        f"Não consegui detectar a área do arquivo '{caminho_input}'. "
+        f"Use o parâmetro override=<chave>. Chaves disponíveis: "
+        f"{list(AREA_PROFILES.keys())}"
     )

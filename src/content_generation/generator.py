@@ -4,6 +4,24 @@ from openai import OpenAI
 
 from src.content_generation.area_profiles import get_profile
 
+import re
+
+_PADROES_PROMPT_VAZADO = [
+    re.compile(r"^\s*(Crie|Gere|Elabore|Produza|Escreva)\s+\d+\s+quest[õo]es.*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^\s*TAREFAS DE GERAÇÃO.*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^\s*T\d+\.\s+(Gere|Crie|Elabore|Produza|Escreva).*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^\s*FORMATO DE SAÍDA.*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^={5,}$", re.MULTILINE),
+]
+
+def _limpar_vazamentos_prompt(texto: str) -> str:
+    if not texto:
+        return texto
+    for padrao in _PADROES_PROMPT_VAZADO:
+        texto = padrao.sub("", texto)
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    return texto.strip()
+
 
 OPENAI_MODEL  = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 # Define a área de formação: "industrial", "saude", "enfermagem", etc.
@@ -16,8 +34,7 @@ def configurar_openai():
     if not api_key:
         raise Exception("OPENAI_API_KEY não encontrada no .env.")
     client = OpenAI(api_key=api_key)
-    area = os.getenv("AREA_FORMACAO", "industrial")
-    print(f"OpenAI configurado (modelo: {OPENAI_MODEL}, area: {area})")
+    print(f"OpenAI configurado (modelo: {OPENAI_MODEL})")
     return client
 
 
@@ -119,7 +136,7 @@ Esta é uma apostila de {profile['nome_area']}, NÃO de engenharia industrial.
 # GERADORES DE SEÇÕES GLOBAIS DA DISCIPLINA
 # =============================================================================
 
-def _gerar_introducao(client, disciplina: str, ementa: str, contexto: str) -> str:
+def _gerar_introducao(client, disciplina, ementa, contexto, profile):
     profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
     ctx = _bloco_contexto_area(profile)
     regras = _bloco_regras(profile)
@@ -375,18 +392,38 @@ REGRAS OBRIGATÓRIAS:
 
 CADERNO DO ALUNO — gere as três partes abaixo (sem gabaritos, sem critérios):
 
-## Parte I — Questões Objetivas (10 questões)
+============================================================
+TAREFAS DE GERAÇÃO (NÃO reproduza estas linhas no output):
 
-Crie 10 questões objetivas de múltipla escolha (4 alternativas: A, B, C, D) cobrindo os principais tópicos da disciplina {disciplina}. Cada questão deve avaliar compreensão, aplicação ou análise técnica no contexto de {profile['nome_area']}.
+T1. Gere 10 questões objetivas de múltipla escolha (A, B, C, D) cobrindo os principais tópicos de {disciplina}, avaliando compreensão, aplicação e análise técnica no contexto de {profile['nome_area']}.
+T2. Gere 6 questões dissertativas em situações profissionais reais do {nome_prof}: 2 conceituais, 2 analíticas, 2 de síntese crítica. Apenas enunciados.
+T3. Gere 4 questões de caso prático com cenários completos exigindo decisão técnica, justificativa e reflexão sobre erros. Apenas enunciados.
+============================================================
 
-## Parte II — Questões Dissertativas (6 questões)
+FORMATO DE SAÍDA — reproduza APENAS as seções abaixo, substituindo cada <...>. NÃO inclua as TAREFAS acima, NÃO escreva "Crie X questões", NÃO repita este aviso:
 
-Crie 6 questões dissertativas abrangentes que exijam que o aluno explique, analise, relacione e aplique o conhecimento da disciplina {disciplina} em situações profissionais reais do {nome_prof}. Distribua entre: 2 questões conceituais, 2 questões analíticas, 2 questões de síntese crítica. APENAS os enunciados — sem critérios de resposta nesta parte.
+## Parte I — Questões Objetivas
 
-## Parte III — Questões Baseadas em Casos Práticos (4 questões)
+Q1. <enunciado>
+A) <opção>  B) <opção>  C) <opção>  D) <opção>
 
-Crie 4 questões baseadas em situações profissionais realistas do {nome_prof} relacionadas à disciplina {disciplina}. Cada questão deve apresentar um cenário completo e pedir ao aluno que tome decisões técnicas, justifique condutas e reflita sobre erros possíveis. APENAS os enunciados — sem gabaritos nesta parte.
+[... repita Q2 a Q10 no mesmo formato]
 
+## Parte II — Questões Dissertativas
+
+DE1. <enunciado conceitual>
+DE2. <enunciado conceitual>
+DE3. <enunciado analítico>
+DE4. <enunciado analítico>
+DE5. <enunciado de síntese crítica>
+DE6. <enunciado de síntese crítica>
+
+## Parte III — Questões Baseadas em Casos Práticos
+
+CP1. <cenário completo e pergunta>
+CP2. <cenário completo e pergunta>
+CP3. <cenário completo e pergunta>
+CP4. <cenário completo e pergunta>
 ===CADERNO_PROFESSOR===
 
 ## Gabarito Comentado — Parte I
@@ -407,8 +444,8 @@ Liste todas as competências técnicas, cognitivas e atitudinais avaliadas nas q
 """
     resultado = _chamar_api(client, prompt, max_tokens=16000)
     partes = resultado.split("===CADERNO_PROFESSOR===", 1)
-    bloco_aluno = partes[0].strip()
-    bloco_professor = partes[1].strip() if len(partes) > 1 else ""
+    bloco_aluno = _limpar_vazamentos_prompt(partes[0].strip())
+    bloco_professor = _limpar_vazamentos_prompt(partes[1].strip()) if len(partes) > 1 else ""
     return bloco_aluno, bloco_professor
 
 
@@ -569,75 +606,78 @@ CONTEXTO COMPLEMENTAR: {contexto}
 
 Gere a PÁGINA DE PERGUNTAS E EXERCÍCIOS do tópico "{topico}" na disciplina {disciplina} para curso técnico de {profile['nome_area']}.
 
-INSTRUÇÃO CRÍTICA DE FORMATAÇÃO: Você DEVE separar a saída em duas partes com a linha exata abaixo (sem espaços extras, exatamente assim):
+INSTRUÇÃO CRÍTICA DE FORMATAÇÃO: Você DEVE separar a saída em duas partes com a linha exata abaixo (sem espaços extras):
 ===CADERNO_PROFESSOR===
 
 Tudo ANTES do separador é o CADERNO DO ALUNO (apenas enunciados, sem respostas).
 Tudo DEPOIS do separador é o CADERNO DO PROFESSOR (gabarito e critérios completos).
 
 REGRAS OBRIGATÓRIAS:
-- Total entre 500 e 700 palavras (equivalente a 1 página de apostila A4).
+- Total entre 500 e 700 palavras.
 - Use Markdown estruturado: títulos (###), numeração clara.
 - Linguagem técnica formal em português do Brasil. Sem emojis. Sem linguagem informal.
 - As perguntas devem avaliar entendimento real e aplicação técnica, não memorização superficial.
 - Onde pertinente, inclua questões com parâmetros numéricos ({grandezas}) exigindo interpretação ou cálculo.
-- Seja preciso e objetivo. Não ultrapasse 700 palavras no total.
 
-CADERNO DO ALUNO (antes do separador):
+============================================================
+TAREFAS DE GERAÇÃO (NÃO reproduza estas linhas no output. Elas são instruções para você, não conteúdo da apostila):
 
-### Questoes Objetivas
+T1. Gere 5 questões objetivas de múltipla escolha (alternativas A, B, C, D) sobre "{topico}" no contexto de {profile['nome_area']}. Cada questão deve avaliar compreensão, aplicação ou análise técnica — nunca memorização. Variar o nível de complexidade.
 
-Crie 5 questoes objetivas de multipla escolha (alternativas A, B, C, D) sobre o topico {topico} no contexto de {profile['nome_area']}. Cada questao deve avaliar compreensao, aplicacao ou analise tecnica — nao apenas memorizacao.
+T2. Gere 3 questões dissertativas exigindo análise e aplicação do conhecimento de "{topico}" em situações profissionais reais do {nome_prof}.
 
-Q1. [Enunciado]
-A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
+T3. Gere 2 questões de caso prático com cenário realista de "{topico}" na área de {profile['nome_area']}, exigindo decisão técnica justificada e descrição da conduta correta.
+============================================================
 
-Q2. [Enunciado]
-A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
+FORMATO DE SAÍDA EXATO — reproduza APENAS o que está abaixo, substituindo cada marcador <...> pelo conteúdo gerado. NÃO inclua as linhas de TAREFAS acima, NÃO inclua frases como "Crie X questões", NÃO inclua o cabeçalho "TAREFAS" nem este aviso:
 
-Q3. [Enunciado]
-A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
+### Questões Objetivas
 
-Q4. [Enunciado]
-A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
+Q1. <enunciado da questão objetiva>
+A) <opção A>  B) <opção B>  C) <opção C>  D) <opção D>
 
-Q5. [Enunciado]
-A) [opcao]  B) [opcao]  C) [opcao]  D) [opcao]
+Q2. <enunciado>
+A) <opção A>  B) <opção B>  C) <opção C>  D) <opção D>
 
-### Questoes Dissertativas
+Q3. <enunciado>
+A) <opção A>  B) <opção B>  C) <opção C>  D) <opção D>
 
-Crie 3 questoes dissertativas que exijam analise e aplicacao do conhecimento do topico {topico} em situacoes profissionais reais do {nome_prof}.
+Q4. <enunciado>
+A) <opção A>  B) <opção B>  C) <opção C>  D) <opção D>
 
-D1. [Enunciado completo]
+Q5. <enunciado>
+A) <opção A>  B) <opção B>  C) <opção C>  D) <opção D>
 
-D2. [Enunciado completo]
+### Questões Dissertativas
 
-D3. [Enunciado completo]
+D1. <enunciado completo da dissertativa>
 
-### Questoes Baseadas em Caso Pratico
+D2. <enunciado completo>
 
-Crie 2 questoes baseadas em cenarios realistas do topico {topico} na area de {profile['nome_area']}. Cada questao deve apresentar uma situacao real e pedir ao aluno que tome uma decisao tecnica e explique a conduta correta.
+D3. <enunciado completo>
 
-CP1. [Cenario e enunciado]
+### Questões Baseadas em Caso Prático
 
-CP2. [Cenario e enunciado]
+CP1. <cenário detalhado e pergunta exigindo decisão técnica>
+
+CP2. <cenário detalhado e pergunta exigindo decisão técnica>
 
 ===CADERNO_PROFESSOR===
 
-### Gabarito e Criterios de Avaliacao
+### Gabarito e Critérios de Avaliação
 
-**Gabarito objetivas:** Q1-[letra] | Q2-[letra] | Q3-[letra] | Q4-[letra] | Q5-[letra]
+**Gabarito objetivas:** Q1-<letra> | Q2-<letra> | Q3-<letra> | Q4-<letra> | Q5-<letra>
 
-**Comentario das respostas objetivas:** Para cada questao, explique brevemente por que a alternativa correta e correta e por que as demais estao incorretas.
+**Comentário das respostas objetivas:** Para cada questão, explique por que a alternativa correta está correta e por que as demais estão incorretas.
 
-**Criterios das dissertativas e casos praticos:** Para cada questao (D1, D2, D3, CP1, CP2), liste os pontos essenciais que a resposta deve conter.
+**Critérios das dissertativas e casos práticos:** Para cada questão (D1, D2, D3, CP1, CP2), liste os pontos essenciais que a resposta deve conter.
 
-**Competencias avaliadas:** [lista das competencias tecnicas e atitudinais avaliadas nesta pagina]
+**Competências avaliadas:** Lista das competências técnicas e atitudinais avaliadas nesta página.
 """
     resultado = _chamar_api(client, prompt, max_tokens=4000)
     partes = resultado.split("===CADERNO_PROFESSOR===", 1)
-    bloco_aluno = partes[0].strip()
-    bloco_professor = partes[1].strip() if len(partes) > 1 else ""
+    bloco_aluno = _limpar_vazamentos_prompt(partes[0].strip())
+    bloco_professor = _limpar_vazamentos_prompt(partes[1].strip()) if len(partes) > 1 else ""
     return bloco_aluno, bloco_professor
 
 
@@ -645,25 +685,20 @@ CP2. [Cenario e enunciado]
 # FUNÇÃO PÚBLICA: gerar_documento (mantém a assinatura original)
 # =============================================================================
 
-def gerar_documento(client, disciplina: str, ementa: str, conteudo: str, contexto: str):
-    """
-    Retorna str para a maioria das seções.
-    Retorna tuple(bloco_aluno, bloco_professor) quando conteudo contém instrução de questões/avaliação.
-    """
+def gerar_documento(client, disciplina, ementa, conteudo, contexto, profile):
     instrucao = conteudo.lower()
 
-    if "introdução" in instrucao or "introducao" in instrucao or "introdução" in instrucao:
-        return _gerar_introducao(client, disciplina, ementa, contexto)
+    if "introdução" in instrucao or "introducao" in instrucao:
+        return _gerar_introducao(client, disciplina, ementa, contexto, profile)
     elif "objetivo" in instrucao:
-        return _gerar_objetivos(client, disciplina, ementa, contexto)
+        return _gerar_objetivos(client, disciplina, ementa, contexto, profile)
     elif "exemplo" in instrucao or "caso" in instrucao or "prático" in instrucao:
-        return _gerar_exemplos(client, disciplina, ementa, contexto)
+        return _gerar_exemplos(client, disciplina, ementa, contexto, profile)
     elif "resumo" in instrucao or "síntese" in instrucao:
-        return _gerar_resumo(client, disciplina, ementa, contexto)
-    elif "questão" in instrucao or "quest" in instrucao or "dissertat" in instrucao or "avaliação" in instrucao:
-        return _gerar_questoes(client, disciplina, ementa, contexto)
+        return _gerar_resumo(client, disciplina, ementa, contexto, profile)
+    elif "questão" in instrucao or "dissertat" in instrucao or "avaliação" in instrucao:
+        return _gerar_questoes(client, disciplina, ementa, contexto, profile)
     else:
-        profile = get_profile(os.getenv("AREA_FORMACAO", "industrial"))
         ctx = _bloco_contexto_area(profile)
         regras = _bloco_regras(profile)
         prompt = f"""Você é uma IA especialista sênior em produção de material didático para cursos técnicos profissionalizantes da área de {profile['nome_area']}.

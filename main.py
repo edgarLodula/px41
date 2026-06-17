@@ -21,6 +21,7 @@ from src.output_formatter.markdown_generator import gerar_markdowns
 from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 from src.video_generator.pipeline_video import gerar_videos_por_disciplina
 from src.content_generation.area_profiles import get_profile, detectar_area_por_nome_pdf
+from src.content_generation.area_detector import detectar_area_do_input
 
 
 # =========================
@@ -56,12 +57,22 @@ def main():
     # ------------------------------------------------------------------
     # PERFIL DA ÁREA ATIVO
     # ------------------------------------------------------------------
-    def _resolver_area_pdf(nome_pdf: str) -> str:
+    def _resolver_area_pdf(caminho_pdf: str, nome_pdf: str) -> tuple[str, str]:
+        """
+        Retorna (area_key, estrategia_usada).
+        Ordem de prioridade:
+        1. Override manual em AREA_POR_PDF (por nome de arquivo).
+        2. Detecção automática pelo CONTEÚDO do PDF (título → heurística → LLM).
+        """
         base = nome_pdf.replace(".pdf", "")
-        if base in AREA_POR_PDF:
-            return AREA_POR_PDF[base]
-        return detectar_area_por_nome_pdf(nome_pdf)
 
+        # 1. Override manual (opcional — deixe AREA_POR_PDF vazio se não quiser usar)
+        if base in AREA_POR_PDF:
+            return AREA_POR_PDF[base], "override_manual"
+
+        # 2. Detecção automática pelo conteúdo do arquivo
+        det = detectar_area_do_input(caminho_pdf, client=client)
+        return det["area_key"], det["estrategia"]
     # ------------------------------------------------------------------
     # 1. DESCOBRE TODOS OS PDFs em data/input/
     # ------------------------------------------------------------------
@@ -101,9 +112,10 @@ def main():
 
         # ⭐ Detecta a área DESTE PDF (não usa .env)
         try:
-            area_pdf = _resolver_area_pdf(nome_pdf)
+            area_pdf, estrategia = _resolver_area_pdf(caminho_pdf, nome_pdf)
             profile_pdf = get_profile(area_pdf)
-            print(f"   Área detectada: {profile_pdf['nome_area']} ({profile_pdf['nome_profissional']})")
+            print(f"   Área detectada: {profile_pdf['nome_area']} "
+                f"({profile_pdf['nome_profissional']}) [via {estrategia}]")
         except ValueError as e:
             print(f"   ❌ {e} — pulando este PDF.")
             continue
