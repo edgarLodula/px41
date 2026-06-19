@@ -2,7 +2,6 @@ import os
 import re
 import time
 
-import requests
 from openai import OpenAI
 
 from src.content_generation.area_profiles import get_profile
@@ -83,9 +82,11 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
     Variáveis de ambiente necessárias:
       HEYGEN_API_KEY, HEYGEN_AVATAR_ID, HEYGEN_VOICE_ID
     """
+    import shutil
     from src.video_generator.slides_generator import gerar_slides
     from src.video_generator.gerador_videos_direto import (
-        _upload_slide_heygen, gerar_video_heygen_scenes, aguardar_video,
+        _upload_slide_heygen,
+        gerar_video_v3_multicena,
     )
 
     heygen_token = os.getenv("HEYGEN_API_KEY")
@@ -95,13 +96,13 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
     # 1. Parsear roteiro → cenas
     cenas = _parsear_roteiro_blocos(roteiro)
 
-    # 2. Gerar slides e coletar caminhos
+    # 2. Gerar slides (usados como fundo do avatar)
     print(f"   Gerando {len(cenas)} slide(s) em: {pasta_slides}")
     caminhos_slides = gerar_slides(cenas, pasta_slides, disciplina)
 
-    # 3. Upload de cada slide para o HeyGen; fallback para fundo sólido se falhar
+    # 3. Upload dos slides; fallback para fundo sólido se falhar
     print(f"   Fazendo upload de {len(caminhos_slides)} slide(s) para HeyGen...")
-    cenas_com_slides = []
+    cenas_para_video = []
     for cena, caminho_slide in zip(cenas, caminhos_slides):
         fala = cena.get("fala", "").strip()
         if not fala:
@@ -112,34 +113,30 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
         except Exception as e:
             print(f"      [AVISO] Upload falhou ({e}). Cena usará fundo sólido.")
             asset_id = None
-        cenas_com_slides.append({"fala": fala, "asset_id": asset_id})
+        cenas_para_video.append({"fala": fala, "asset_id": asset_id})
 
-    if not cenas_com_slides:
+    if not cenas_para_video:
         raise ValueError("Nenhuma cena com fala encontrada no roteiro.")
 
-    # 4. Enviar para HeyGen como vídeo multi-cenas
-    print(f"   Enviando {len(cenas_com_slides)} cena(s) para HeyGen...")
-    video_id = gerar_video_heygen_scenes(cenas_com_slides, disciplina, heygen_token)
-
-    # 5. Aguardar processamento
-    print(f"   Aguardando processamento (video_id: {video_id})...")
-    info = aguardar_video(video_id, heygen_token)
-
-    video_url = info.get("video_url")
-    if not video_url:
-        raise RuntimeError(f"HeyGen concluiu sem video_url. Resposta: {info}")
-
-    # 6. Baixar vídeo
+    # 4. Gerar vídeo multi-cenas via v3 (polling e download já internos)
     pasta_video = os.path.dirname(caminho_saida)
     if pasta_video:
         os.makedirs(pasta_video, exist_ok=True)
 
-    print(f"   Baixando vídeo: {video_url}")
-    resp = requests.get(video_url, timeout=120)
-    resp.raise_for_status()
-    with open(caminho_saida, "wb") as f:
-        f.write(resp.content)
-    print(f"   Vídeo salvo: {caminho_saida} ({len(resp.content) // 1024} KB)")
+    print(f"   🎬 Gerando {len(cenas_para_video)} cena(s) via HeyGen v3...")
+    caminho_temp = gerar_video_v3_multicena(
+        cenas_com_slides=cenas_para_video,
+        disciplina=disciplina,
+        heygen_token=heygen_token,
+        avatar_id=os.getenv("HEYGEN_AVATAR_ID"),
+        voice_id=os.getenv("HEYGEN_VOICE_ID"),
+        pasta_temp=pasta_video,
+    )
+
+    # 5. Mover para o destino final se necessário
+    if os.path.abspath(caminho_temp) != os.path.abspath(caminho_saida):
+        shutil.move(caminho_temp, caminho_saida)
+    print(f"   ✅ Vídeo salvo: {caminho_saida}")
 
 
 def configurar_openai():
@@ -159,7 +156,7 @@ def _tratar_erro_openai(erro: str, tentativa: int, max_tentativas: int):
         print(f"Rate limit. Aguardando {espera}s... ({tentativa + 1}/{max_tentativas})")
         time.sleep(espera)
     else:
-        raise
+        raise Exception(f"Erro inesperado na OpenAI: {erro}")
 
 
 def _chamar_api(client, prompt: str, max_tokens: int = 16000) -> str:

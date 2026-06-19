@@ -101,7 +101,7 @@ Notas Estratégicas de {nome_avatar} para a Diretoria:
 
 **Conteúdo da disciplina para basear o roteiro:**
 
-{texto[:2000]}
+{texto[:8000]}
 """
 
     for tentativa in range(3):
@@ -110,7 +110,7 @@ Notas Estratégicas de {nome_avatar} para a Diretoria:
                 model=modelo,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=4000,
             )
             return resposta.choices[0].message.content
         except Exception as e:

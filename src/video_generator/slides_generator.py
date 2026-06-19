@@ -40,6 +40,16 @@ def _carregar_fonte(tamanho, negrito=False):
         try:
             return ImageFont.truetype(FONTE_PATH, tamanho)
         except OSError:
+            pass
+    # Fallback: fontes do sistema Windows
+    _win_bold   = r"C:\Windows\Fonts\calibrib.ttf"
+    _win_normal = r"C:\Windows\Fonts\calibri.ttf"
+    try:
+        return ImageFont.truetype(_win_bold if negrito else _win_normal, tamanho)
+    except OSError:
+        try:
+            return ImageFont.truetype(r"C:\Windows\Fonts\arial.ttf", tamanho)
+        except OSError:
             return ImageFont.load_default()
 
 
@@ -450,9 +460,6 @@ def _gerar_slide_cena(cena, caminho_saida, disciplina, conteudo=None, numero=1, 
     noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=1))
     noise_rgb = noise_img.convert("RGB")
     img = Image.blend(img, noise_rgb, alpha=0.10)
-    draw = ImageDraw.Draw(img)
-
-
     draw = ImageDraw.Draw(img)
 
 

@@ -1,0 +1,14 @@
+line-length = 120
+
+[lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]  # line length enforced by formatter, not linter
+
+exclude = [
+    "src/video_generator/**",
+    "venv/**",
+    ".venv/**",
+]
+
+[lint.per-file-ignores]
+"api.py" = ["E402", "F401"]
