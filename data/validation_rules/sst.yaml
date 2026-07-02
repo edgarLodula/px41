@@ -1,0 +1,102 @@
+rules:
+  - id: "ppra_substituir_por_pgr"
+    pattern: "PPRA"
+    severity: "critical"
+    weight: 25
+    message: "PPRA obsoleto — substituir por PGR conforme NR-1 atualizada"
+    fix: "PGR"
+    context_window: 80
+
+  - id: "nr9_escopo_antigo"
+    pattern: "NR-9.*?(?:Avaliação e controle|avaliação e controle)"
+    severity: "critical"
+    weight: 25
+    message: "NR-9 com escopo antigo — revisar conforme estrutura atual das NRs"
+    context_window: 80
+
+  - id: "ibutg_definicao_errada"
+    pattern: "IBUTG.*?(?:químicos|biológicos).*?físicos"
+    severity: "critical"
+    weight: 25
+    message: "IBUTG com definição errada — mede estresse térmico, não exposição a agentes químicos, biológicos e físicos"
+    context_window: 80
+
+  - id: "classificacao_acidentes_redundante"
+    pattern: "ergonômicos e de acidente"
+    severity: "critical"
+    weight: 25
+    message: "Classificação redundante — substituir 'ergonômicos e de acidente' por classificação adequada, como 'ergonômicos e mecânicos', quando aplicável"
+    fix: "ergonômicos e mecânicos"
+    context_window: 80
+
+  - id: "ato_inseguro_abolido"
+    pattern: "[Aa]to\\s[Ii]nseguro"
+    severity: "critical"
+    weight: 25
+    message: "Termo 'ato inseguro' é obsoleto e culpabilizante — revisar abordagem conceitual"
+    context_window: 80
+
+  - id: "cipa_nome_antigo"
+    pattern: "Comissão Interna de Prevenção de Acidentes(?!\\s+e\\s+de\\s+Assédio)"
+    severity: "high"
+    weight: 10
+    message: "CIPA ainda usa nome antigo — substituir por 'Comissão Interna de Prevenção de Acidentes e de Assédio'"
+    fix: "Comissão Interna de Prevenção de Acidentes e de Assédio"
+    context_window: 80
+
+  - id: "cat_sem_esocial"
+    pattern: "CAT.*?(?:emitir|emissão|documento)(?!.*?(?:eSocial|S-2210))"
+    severity: "high"
+    weight: 10
+    message: "CAT mencionada sem referência ao eSocial/S-2210 — revisar atualização normativa"
+    context_window: 80
+
+  - id: "apenas_arvore_causas"
+    pattern: "Árvore de Causas(?!.*?(?:Swiss\\sCheese|PDCA|barreiras))"
+    severity: "medium"
+    weight: 3
+    message: "Uso isolado de Árvore de Causas — considerar complementar com Swiss Cheese, PDCA ou análise de barreiras"
+    context_window: 80
+
+  - id: "fispq_obsoleto"
+    pattern: "FISPQ"
+    severity: "high"
+    weight: 10
+    message: "FISPQ obsoleto — substituir por FDS, Ficha com Dados de Segurança"
+    fix: "FDS"
+    context_window: 80
+
+  - id: "lei_8666_revogada"
+    pattern: "(?:8\\.666/1993|Lei\\s+n[ºo]?\\s*8\\.666)"
+    severity: "high"
+    weight: 10
+    message: "Lei 8.666/1993 revogada — revisar referência conforme nova Lei de Licitações"
+    context_window: 80
+
+  - id: "nr9_riscos_ergonomicos"
+    pattern: "NR-9.*?ergon[oô]mico"
+    severity: "critical"
+    weight: 25
+    message: "NR-9 associada a risco ergonômico — revisar enquadramento técnico"
+    context_window: 80
+
+  - id: "paragrafos_muito_longos"
+    pattern: "[^\\n]{2500,}"
+    severity: "medium"
+    weight: 3
+    message: "Parágrafo muito longo — revisar legibilidade e dividir o conteúdo"
+    context_window: 80
+
+  - id: "emojis_no_texto"
+    pattern: "[\\U0001F300-\\U0001F9FF]"
+    severity: "medium"
+    weight: 3
+    message: "Emoji encontrado em texto formal — remover para manter padrão editorial"
+    context_window: 80
+
+  - id: "citacao_sem_fonte"
+    pattern: "(?:conforme|segundo|de acordo com)\\s+(?:a\\s+)?(?:lei|norma|regulamento)(?!\\s*(?:n[ºo]?|\\d))"
+    severity: "medium"
+    weight: 3
+    message: "Citação normativa sem número ou ano — adicionar referência completa"
+    context_window: 80

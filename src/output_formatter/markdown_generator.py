@@ -237,6 +237,7 @@ def gerar_markdowns(
     pasta_saida: str = "data/output/markdown",
     force: bool = False,
     sleep_fn=None,
+    instructions: str = "",
 ) -> list[ResultadoDisciplina]:
     """
     Gera arquivos Markdown de aluno e professor para cada disciplina.
@@ -362,6 +363,14 @@ def gerar_markdowns(
                     for c in chunks
                     if c["disciplina"].lower() != disciplina.lower()
                 )[:3_000]
+
+                if instructions:
+                    contexto = (
+                        f"{contexto}\n\n"
+                        "Observações editoriais do solicitante (incorpore quando pertinente, "
+                        "sem alterar a estrutura pedagógica nem reduzir a qualidade técnica):\n"
+                        f"{instructions}"
+                    )
 
                 # ---- Gera tópico por aula ----
                 topicos_dict: dict[str, dict] = {}

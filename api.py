@@ -28,9 +28,11 @@ Rodar:
   uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 """
 
+import io
 import os
 import re
 import json
+import zipfile
 import tempfile
 import threading
 import traceback
@@ -42,7 +44,7 @@ load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 # Pipeline principal
@@ -151,12 +153,13 @@ def run_pipeline(file_paths: list[str], instructions: str):
 
     try:
         # Imports dentro do try para capturar erros de dependência ausente
-        from src.pdf_csv.pdf_csv import extrair_pdf_para_csv
+        from src.pdf_csv.pdf_csv import extrair_pdf_para_csv, aplicar_correcoes
         from src.syllabus_extractor.csv_processor import extrair_base_csv
         from src.content_generation.embedding_model import carregar_modelo, gerar_embeddings
         from src.content_generation.faiss_index import criar_ou_carregar_index
         from src.content_generation.rag_pipeline import buscar_chunks
         from src.content_generation.generator import configurar_openai, gerar_documento
+        from src.content_generation.area_detector import detectar_area_do_input
         from src.output_formatter.markdown_generator import gerar_markdowns
         from src.workbooks_generator.workbooks_generator import gerar_apostilas_por_curso
 
@@ -171,12 +174,17 @@ def run_pipeline(file_paths: list[str], instructions: str):
             nome_base   = Path(caminho_pdf).stem
             caminho_csv = str(DATA_CSV / (nome_base + ".csv"))
             extrair_pdf_para_csv(caminho_pdf, caminho_csv)
+            aplicar_correcoes(caminho_csv)
             registros = extrair_base_csv(caminho_pdf, str(DATA_CSV), str(DATA_JSON))
             if not registros:
                 raise Exception(
                     f"Nenhum registro extraído de '{Path(caminho_pdf).name}'. "
                     "Verifique se o PDF contém tabelas com Disciplina / Ementa / Conteúdo."
                 )
+            det = detectar_area_do_input(caminho_pdf, client=None)
+            area_key = det["area_key"]
+            for r in registros:
+                r["area"] = area_key
             base_geral.extend(registros)
         with open(caminho_json, "w", encoding="utf-8") as f:
             json.dump(base_geral, f, ensure_ascii=False, indent=2)
@@ -197,7 +205,11 @@ def run_pipeline(file_paths: list[str], instructions: str):
 
         # ── Etapa 3: Índice FAISS ─────────────────────────────────────────
         set_stage(3, "running")
-        index = criar_ou_carregar_index(caminho_index, embeddings, forcar_rebuild=True)
+        index = criar_ou_carregar_index(
+            caminho_index, embeddings,
+            forcar_rebuild=True,
+            n_registros=len(base_geral),
+        )
         set_stage(3, "done")
 
         # ── Etapa 4: Setup LLM ────────────────────────────────────────────
@@ -215,6 +227,8 @@ def run_pipeline(file_paths: list[str], instructions: str):
             index=index,
             gemini=llm,
             pasta_saida=str(DATA_MARKDOWN),
+            force=True,
+            instructions=instructions,
         )
         set_stage(5, "done")
 
@@ -357,6 +371,30 @@ async def download_apostila():
     )
 
 
+@app.get("/download/apostilas-zip")
+async def download_apostilas_zip():
+    """Empacota todo o conteúdo de workbooks_pdf/aluno em um ZIP e devolve para download."""
+    aluno_dir = DATA_PDF / "aluno"
+    if not aluno_dir.exists():
+        raise HTTPException(404, "Nenhuma apostila gerada ainda.")
+
+    pdfs = sorted(aluno_dir.rglob("*.pdf"))
+    if not pdfs:
+        raise HTTPException(404, "Nenhum PDF encontrado em workbooks_pdf/aluno.")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for pdf in pdfs:
+            zf.write(pdf, pdf.relative_to(aluno_dir))
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="apostilas_aluno.zip"'},
+    )
+
+
 @app.post("/approve")
 async def approve_content():
     """Aprova o conteúdo e dispara a geração real de vídeo em background."""
@@ -432,12 +470,16 @@ async def list_videos():
         return {"videos": sorted(video_paths.keys())}
 
     # Fallback: varre o filesystem (vídeos de sessões anteriores)
-    videos = []
-    for root, _, files in os.walk(str(DATA_VIDEO)):
+    # Usa o nome da subpasta como disciplina, igual ao que run_video() indexa.
+    disciplinas: set[str] = set()
+    data_video_str = str(DATA_VIDEO)
+    for root, _, files in os.walk(data_video_str):
+        if root == data_video_str:
+            continue  # ignora arquivos soltos na raiz
         for f in files:
             if f.lower().endswith((".mp4", ".avi", ".mov", ".webm")):
-                videos.append(f)
-    return {"videos": sorted(set(videos))}
+                disciplinas.add(os.path.basename(root))
+    return {"videos": sorted(disciplinas)}
 
 
 @app.get("/download/video/{nome}")
@@ -474,11 +516,14 @@ async def download_video(nome: str):
 
 @app.get("/cursos")
 async def list_cursos():
-    cursos = []
-    if not DATA_PDF.exists():
+    # gerar_apostilas_por_curso cria: workbooks_pdf/aluno/<curso>/<disciplina>.pdf
+    # Iteramos apenas o subdiretório "aluno" para listar cursos do caderno do aluno.
+    aluno_dir = DATA_PDF / "aluno"
+    if not aluno_dir.exists():
         return {"cursos": []}
 
-    for entry in sorted(DATA_PDF.iterdir()):
+    cursos = []
+    for entry in sorted(aluno_dir.iterdir()):
         if not entry.is_dir():
             continue
         apostilas = []
