@@ -32,6 +32,7 @@ import io
 import os
 import re
 import json
+import shutil
 import zipfile
 import tempfile
 import threading
@@ -56,10 +57,8 @@ from src.video_generator.gerador_videos_direto import (
     extrair_markdown_do_pdf,
     gerar_roteiro,
     parsear_cenas_do_roteiro,
-    gerar_video_heygen,
-    aguardar_video,
+    gerar_video_v3_multicena,
     verificar_status_video,
-    extrair_falas_do_roteiro,
 )
 
 # ---------------------------------------------------------------------------
@@ -262,7 +261,7 @@ def run_pipeline(file_paths: list[str], instructions: str):
 
 def run_video():
     """
-    Etapa 7: gera os vídeos usando pipeline_video.py (roteiro via OpenAI + HeyGen v2).
+    Etapa 7: gera os vídeos usando pipeline_video.py (roteiro via OpenAI + HeyGen v3, multi-cena).
     Disparado após /approve.
     """
     try:
@@ -638,7 +637,15 @@ def _gerar_cenas_em_background(job_id: str):
 
 
 def _gerar_video_em_background(job_id: str):
-    """Etapa 7: envia as falas das disciplinas selecionadas para o HeyGen v3."""
+    """
+    Etapa 7: gera o vídeo no HeyGen v3 para cada disciplina selecionada.
+
+    Cada cena aprovada (abertura/desenvolvimento/encerramento) vira uma chamada
+    HeyGen independente, com motion_prompt/expressiveness derivados da direção
+    [PRODUCAO] daquela cena, e os vídeos são concatenados no final. Isso evita
+    juntar todas as falas em um único texto corrido — que gerava um vídeo com
+    uma única expressão estática do início ao fim.
+    """
     job          = _jobs[job_id]
     heygen_token = os.getenv("HEYGEN_API_KEY")
     pasta        = _pasta_job(job_id)
@@ -646,45 +653,57 @@ def _gerar_video_em_background(job_id: str):
     pasta_videos.mkdir(exist_ok=True)
 
     try:
-        cenas = job.get("scenes", [])
-        cenas_selecionadas = (
-            [d for d in cenas if d.get("selecionada", True)]
-            if isinstance(cenas, list) else cenas
+        disciplinas = job.get("scenes", [])
+        disciplinas_selecionadas = (
+            [d for d in disciplinas if d.get("selecionada", True)]
+            if isinstance(disciplinas, list) else disciplinas
         )
-
-        falas_por_disciplina = extrair_falas_do_roteiro(cenas_selecionadas)
-        if not falas_por_disciplina:
+        if not disciplinas_selecionadas:
             raise ValueError(
-                "Nenhuma fala encontrada nas disciplinas selecionadas. "
+                "Nenhuma disciplina selecionada. "
                 "Verifique se as disciplinas estão marcadas e se as falas estão preenchidas."
             )
 
-        import requests as req
         videos = []
-        for disciplina, fala in falas_por_disciplina.items():
-            video_id = gerar_video_heygen(fala, disciplina, heygen_token)
-            info     = aguardar_video(video_id, heygen_token)
+        for disc in disciplinas_selecionadas:
+            disciplina = disc.get("disciplina", "Disciplina")
+            cenas_com_fala = [
+                {"fala": c["fala"], "producao": c.get("producao", "")}
+                for c in disc.get("cenas", [])
+                if c.get("fala")
+            ]
+            if not cenas_com_fala:
+                print(f"   [AVISO] Disciplina '{disciplina}' sem falas — pulando")
+                continue
 
-            slug          = re.sub(r"[^\w]", "_", disciplina)[:60]
+            slug             = re.sub(r"[^\w]", "_", disciplina)[:60]
+            pasta_disciplina = pasta_videos / slug
+            pasta_disciplina.mkdir(exist_ok=True)
+
+            caminho_gerado = gerar_video_v3_multicena(
+                cenas_com_slides=cenas_com_fala,
+                disciplina=disciplina,
+                heygen_token=heygen_token,
+                pasta_temp=str(pasta_disciplina),
+            )
+
             caminho_video = str(pasta_videos / f"{slug}.mp4")
-            if info.get("video_url"):
-                video_bytes = req.get(info["video_url"], timeout=60).content
-                with open(caminho_video, "wb") as f:
-                    f.write(video_bytes)
+            if os.path.abspath(caminho_gerado) != os.path.abspath(caminho_video):
+                shutil.copyfile(caminho_gerado, caminho_video)
 
             videos.append({
                 "disciplina":    disciplina,
-                "video_id":      video_id,
-                "video_url":     info.get("video_url"),
-                "duration":      info.get("duration"),
                 "caminho_local": caminho_video,
             })
+
+        if not videos:
+            raise ValueError("Nenhum vídeo gerado — verifique as falas das disciplinas selecionadas.")
 
         _jobs[job_id].update({
             "state":     "completed",
             "videos":    videos,
-            "video_url": videos[0]["video_url"] if videos else None,
-            "duration":  videos[0]["duration"]  if videos else None,
+            "video_url": None,
+            "duration":  None,
         })
         salvar_job(job_id)
 

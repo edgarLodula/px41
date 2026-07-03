@@ -17,19 +17,25 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 def _parsear_roteiro_blocos(roteiro: str) -> list:
     """
     Converte roteiro no formato 'Bloco N: título' + marcadores [AVATAR]/[VISUAL/B-ROLL]/
-    [TEXTO NA TELA] em lista de cenas {fala, visual, texto} compatível com gerar_slides.
+    [TEXTO NA TELA] em lista de cenas {fala, visual, texto, producao} compatível com gerar_slides.
+
+    A direção de atuação entre parênteses em "[AVATAR] (Sorrindo, olhar confiante...)" é
+    capturada em "producao" — antes era descartada, fazendo com que o HeyGen recebesse
+    sempre o mesmo motion_prompt genérico para o vídeo inteiro, independente do que o
+    roteiro pedia para cada cena.
     """
     cenas = []
-    fala_p, visual_p, texto_p = [], [], []
+    fala_p, visual_p, texto_p, producao_p = [], [], [], []
 
     def _salvar_cena():
-        if fala_p or visual_p or texto_p:
+        if fala_p or visual_p or texto_p or producao_p:
             cenas.append({
-                "fala":   " ".join(fala_p).strip(),
-                "visual": " ".join(visual_p).strip(),
-                "texto":  " ".join(texto_p).strip(),
+                "fala":     " ".join(fala_p).strip(),
+                "visual":   " ".join(visual_p).strip(),
+                "texto":    " ".join(texto_p).strip(),
+                "producao": " ".join(producao_p).strip(),
             })
-        fala_p.clear(); visual_p.clear(); texto_p.clear()
+        fala_p.clear(); visual_p.clear(); texto_p.clear(); producao_p.clear()
 
     linhas = roteiro.splitlines()
     i = 0
@@ -40,6 +46,10 @@ def _parsear_roteiro_blocos(roteiro: str) -> list:
             _salvar_cena()
 
         elif ls.upper().startswith("[AVATAR]"):
+            direcao = re.match(r'^\[AVATAR\]\s*\(([^)]*)\)', ls, flags=re.IGNORECASE)
+            if direcao and direcao.group(1).strip():
+                producao_p.append(direcao.group(1).strip())
+
             # Fala pode estar na mesma linha ou entre aspas na(s) linha(s) seguinte(s)
             inline = re.sub(r'^\[AVATAR\]\s*(\([^)]*\))?\s*', '', ls, flags=re.IGNORECASE).strip().strip('"')
             if inline:
@@ -71,7 +81,7 @@ def _parsear_roteiro_blocos(roteiro: str) -> list:
         i += 1
 
     _salvar_cena()
-    return cenas or [{"fala": roteiro[:500], "visual": "", "texto": ""}]
+    return cenas or [{"fala": roteiro[:500], "visual": "", "texto": "", "producao": ""}]
 
 
 def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina: str):
@@ -113,7 +123,11 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
         except Exception as e:
             print(f"      [AVISO] Upload falhou ({e}). Cena usará fundo sólido.")
             asset_id = None
-        cenas_para_video.append({"fala": fala, "asset_id": asset_id})
+        cenas_para_video.append({
+            "fala":     fala,
+            "asset_id": asset_id,
+            "producao": cena.get("producao", ""),
+        })
 
     if not cenas_para_video:
         raise ValueError("Nenhuma cena com fala encontrada no roteiro.")
