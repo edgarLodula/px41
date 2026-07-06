@@ -1,10 +1,13 @@
 import os
 import re
-import shutil
+
+import requests
 
 from src.video_generator.gerador_videos_direto import (
+    aguardar_video,
+    extrair_falas_do_roteiro,
     gerar_roteiro,
-    gerar_video_v3_multicena,
+    gerar_video_heygen,
     parsear_cenas_do_roteiro,
 )
 
@@ -14,17 +17,18 @@ def _slug(nome: str) -> str:
     return slug.strip("_") or "disciplina"
 
 
+def _baixar_video(video_url: str, caminho_saida: str):
+    resp = requests.get(video_url, timeout=60)
+    resp.raise_for_status()
+    with open(caminho_saida, "wb") as f:
+        f.write(resp.content)
+
+
 def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGen_token):
     """
     Gera videos por disciplina a partir dos markdowns ja produzidos pela pipeline.
 
-    Fluxo: markdown -> roteiro -> cenas -> HeyGen v3 (uma chamada por cena) -> concat -> mp4
-
-    Cada cena do roteiro (abertura/desenvolvimento/encerramento) vira uma chamada
-    HeyGen independente, com motion_prompt/expressiveness derivados da direção
-    [PRODUCAO] daquela cena — em vez de concatenar todas as falas em um único
-    bloco de texto e gerar um video "estático" com uma unica expressao do inicio
-    ao fim, o que é a principal causa de o avatar parecer pouco natural.
+    Fluxo: markdown -> roteiro -> cenas -> falas -> HeyGen v3 -> download mp4
     """
     if not openai_token:
         raise ValueError("OPENAI_API_KEY nao configurada.")
@@ -63,33 +67,30 @@ def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGe
                     markdown = f.read()
 
                 roteiro = gerar_roteiro(markdown, disciplina, openai_token)
-                todas_cenas = parsear_cenas_do_roteiro(roteiro)
+                cenas = parsear_cenas_do_roteiro(roteiro)
+                falas = extrair_falas_do_roteiro(cenas)
 
-                disc_data = next(
-                    (d for d in todas_cenas if d.get("disciplina") == disciplina),
-                    None,
-                )
-                if not disc_data and todas_cenas:
-                    disc_data = todas_cenas[0]
-
-                cenas = disc_data.get("cenas", []) if disc_data else []
-                cenas_com_fala = [
-                    {"fala": c["fala"], "producao": c.get("producao", "")}
-                    for c in cenas
-                    if c.get("fala")
-                ]
-                if not cenas_com_fala:
+                fala = falas.get(disciplina)
+                if not fala and falas:
+                    fala = next(iter(falas.values()))
+                if not fala:
+                    fala = " ".join(
+                        cena.get("fala", "")
+                        for grupo in cenas
+                        for cena in grupo.get("cenas", [])
+                        if cena.get("fala")
+                    ).strip()
+                if not fala:
                     raise ValueError("Nenhuma fala encontrada no roteiro gerado.")
 
-                caminho_gerado = gerar_video_v3_multicena(
-                    cenas_com_slides=cenas_com_fala,
-                    disciplina=disciplina,
-                    heygen_token=heyGen_token,
-                    pasta_temp=pasta_disciplina,
-                )
+                video_id = gerar_video_heygen(fala, disciplina, heyGen_token)
+                info = aguardar_video(video_id, heyGen_token)
 
-                if os.path.abspath(caminho_gerado) != os.path.abspath(caminho_video):
-                    shutil.move(caminho_gerado, caminho_video)
+                video_url = info.get("video_url")
+                if not video_url:
+                    raise RuntimeError(f"HeyGen concluiu sem video_url: {info}")
+
+                _baixar_video(video_url, caminho_video)
 
                 print(f"   Finalizado: {caminho_video}")
 

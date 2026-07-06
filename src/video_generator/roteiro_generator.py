@@ -15,17 +15,6 @@ seguindo rigorosamente um formato padronizado com blocos, timecodes e marcaçõe
 
 Com base no conteúdo abaixo, crie um roteiro completo de vídeo-aula inaugural para a disciplina de {disciplina}.
 
-**REGRAS DE NATURALIDADE (muito importantes — o roteiro alimenta um avatar de IA que fala o texto):**
-- O texto dentro das aspas de [AVATAR] deve soar como uma pessoa falando de verdade, não como
-  um texto escrito sendo lido: frases curtas, ritmo variado, conectivos do português falado
-  ("olha", "repara", "então", "e sabe qual é a boa notícia?"). Evite orações longas e subordinadas.
-- Use vírgulas e reticências para marcar pausas naturais de fala (onde a pessoa respiraria).
-- A direção entre parênteses após [AVATAR] deve ser uma instrução CURTA e CONCRETA de expressão
-  facial/corporal/gesto (ex.: "sorrindo, gesticulando com as mãos, olhar direto para a câmera"),
-  não uma descrição abstrata — ela é usada literalmente para guiar a animação do avatar.
-- Varie o tom entre os blocos: gancho/abertura mais energético, desenvolvimento mais didático e
-  calmo, encerramento caloroso — cenas com o mesmo tom do início ao fim soam artificiais.
-
 **SIGA EXATAMENTE este formato:**
 ---
 Roteiro de Vídeo-Aula Inaugural: "Os Superpoderes de [NOME DA DISCIPLINA]"

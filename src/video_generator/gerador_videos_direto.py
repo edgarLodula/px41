@@ -32,69 +32,13 @@ LIMITE_PALAVRAS_MD  = None  # None = usa o markdown completo como contexto
 
 HEYGEN_BASE_URL       = "https://api.heygen.com"
 HEYGEN_ASPECT_RATIO   = "16:9"
-HEYGEN_ENGINE         = os.getenv("HEYGEN_ENGINE", "avatar_iv")   # "avatar_iv" (padrão) | "avatar_v" (melhor qualidade)
-HEYGEN_SPEED          = float(os.getenv("HEYGEN_SPEED", "1.0"))   # 0.5–1.5
-HEYGEN_VOICE_LOCALE   = os.getenv("HEYGEN_VOICE_LOCALE", "pt-BR")
-HEYGEN_EXPRESSIVENESS = os.getenv("HEYGEN_EXPRESSIVENESS", "high")  # "low" | "medium" | "high"
-HEYGEN_MOTION_PROMPT  = os.getenv(
-    "HEYGEN_MOTION_PROMPT",
-    "confident and warm, natural hand gestures while explaining, "
-    "subtle head movement, direct eye contact with the camera",
-)
+HEYGEN_ENGINE         = "avatar_iv"       # "avatar_iv" (padrão) | "avatar_v" (melhor qualidade)
+HEYGEN_SPEED          = 1.0               # 0.5–2.0
+HEYGEN_EXPRESSIVENESS = "medium"          # "low" | "medium" | "high"
+HEYGEN_MOTION_PROMPT  = "calm, professional, occasional hand gestures while teaching"
 HEYGEN_BG_ASSET_ID    = os.getenv("HEYGEN_BG_ASSET_ID", "")
 HEYGEN_BG_COLOR       = "#1a2744"         # fallback: azul escuro neutro
 OPENAI_MODEL          = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-
-# Palavras na direção de cena ([PRODUCAO]) que indicam um tom mais contido —
-# nessas cenas reduzimos a expressividade para não soar exagerado.
-_PALAVRAS_TOM_CONTIDO = (
-    "sério", "serio", "grave", "calmo", "calma", "sóbrio", "sobrio",
-    "concentrado", "concentrada", "atenção", "atencao", "alerta",
-)
-
-
-def _motion_prompt_da_cena(producao: str | None) -> str:
-    """
-    Converte a direção de cena (campo [PRODUCAO] do roteiro, ex.: "Sorrindo,
-    olhar confiante para a câmera, tom acolhedor") em um motion_prompt
-    específico para esta cena.
-
-    Isso evita o principal motivo de o avatar parecer "robótico": sem isso,
-    todas as cenas do vídeo (abertura, desenvolvimento, encerramento) recebiam
-    o MESMO motion_prompt genérico, então o avatar nunca variava gesto/expressão
-    ao longo do vídeo. Cai para o motion_prompt genérico apenas se a cena não
-    tiver direção definida.
-    """
-    producao = (producao or "").strip()
-    if not producao:
-        return HEYGEN_MOTION_PROMPT
-    return (
-        f"{producao}. Natural, subtle body and hand movement coherent with a "
-        "warm, professional teacher speaking directly to the camera."
-    )
-
-
-def _expressividade_da_cena(producao: str | None) -> str:
-    """Deriva a expressividade da cena a partir do tom descrito em [PRODUCAO]."""
-    producao_lower = (producao or "").lower()
-    if any(p in producao_lower for p in _PALAVRAS_TOM_CONTIDO):
-        return "medium"
-    return HEYGEN_EXPRESSIVENESS
-
-
-def _voice_settings() -> dict:
-    return {"speed": HEYGEN_SPEED, "locale": HEYGEN_VOICE_LOCALE}
-
-
-def _campos_expressividade(producao: str | None) -> dict:
-    """
-    `expressiveness` só é aceito pelo HeyGen no engine "avatar_iv" — o engine
-    "avatar_v" rejeita esse campo (erro de validação). Retorna {} nesse caso.
-    """
-    if HEYGEN_ENGINE == "avatar_v":
-        return {}
-    return {"expressiveness": _expressividade_da_cena(producao)}
-
 
 # Estados possíveis do job
 ESTADOS = [
@@ -265,23 +209,11 @@ DISCIPLINA: [próxima disciplina]
 
 REGRAS:
 - Crie entre 3 e 5 cenas por disciplina
-- [FALA] deve soar como uma pessoa falando de verdade, não como um texto escrito sendo lido:
-  * frases curtas, diretas, com ritmo variado — evite orações longas com muitas subordinadas;
-  * use conectivos do português falado ("olha", "repara", "então", "e sabe o que é melhor?", "beleza?");
-  * use pontuação para marcar pausas naturais de fala (vírgulas e reticências onde uma pessoa
-    respiraria ou pausaria para dar ênfase);
-  * é o texto exato para TTS — sem marcações, sem parênteses dentro da fala.
-- [PRODUCAO] deve ser uma direção CURTA e CONCRETA de expressão facial/corporal, escrita como
-  instrução direta para um avatar de IA (ex.: "sorrindo, olhar confiante, gesticulando com as
-  mãos ao explicar"). Liste ações objetivas de expressão/gesto — não escreva narrativa ou
-  justificativa.
-- Varie a intensidade emocional entre as cenas — isso deve aparecer tanto na [FALA] quanto na
-  [PRODUCAO]: abertura mais energética e sorridente, desenvolvimento mais didático e calmo,
-  encerramento caloroso e motivador. Cenas idênticas em tom soam artificiais.
+- [FALA] deve ser fluido, natural, sem marcações — é o texto exato para TTS
+- [PRODUCAO] guia o avatar (expressividade, gestos, emoção)
 - [ANGULO] é sugestão para edição posterior (não afeta o HeyGen diretamente)
 - [TEXTO NA TELA] são palavras-chave impactantes para sobrepor no vídeo
-- Tom geral: acolhedor, empolgante, profissional, mas conversacional — como um professor
-  falando diretamente com um aluno, não lendo um texto em voz alta.
+- Tom geral: acolhedor, empolgante, profissional
 - Mencione a Escola Técnica San Marino na abertura da primeira disciplina
 - Cada disciplina deve ter sua identidade própria no roteiro
 
@@ -437,15 +369,10 @@ def gerar_video_heygen(
     heygen_token: str,
     avatar_id:    str | None = None,
     voice_id:     str | None = None,
-    producao:     str | None = None,
 ) -> str:
     """
     Envia uma fala para HeyGen v3 e retorna o video_id.
     Para múltiplas cenas com slides, use gerar_video_v3_multicena.
-
-    `producao` é a direção de cena (campo [PRODUCAO] do roteiro, ex.: "Sorrindo,
-    olhar confiante") — quando informada, gera um motion_prompt/expressiveness
-    específicos para esta fala em vez dos valores genéricos fixos.
     """
     avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID")
     voice_id  = voice_id  or os.getenv("HEYGEN_VOICE_ID")
@@ -466,9 +393,9 @@ def gerar_video_heygen(
         "script":        fala if not LIMITE_PALAVRAS else _truncar_palavras(fala, LIMITE_PALAVRAS),
         "title":         disciplina,
         "aspect_ratio":  HEYGEN_ASPECT_RATIO,
-        "voice_settings": _voice_settings(),
-        "motion_prompt": _motion_prompt_da_cena(producao),
-        **_campos_expressividade(producao),
+        "voice_settings": {"speed": HEYGEN_SPEED},
+        "motion_prompt": HEYGEN_MOTION_PROMPT,
+        "expressiveness": HEYGEN_EXPRESSIVENESS,
         "engine":        {"type": HEYGEN_ENGINE},
         "background":    (
             {"type": "image", "asset_id": HEYGEN_BG_ASSET_ID}
@@ -506,11 +433,7 @@ def gerar_video_v3_multicena(
     Processa múltiplas cenas com slides via HeyGen v3, baixa cada vídeo
     e os concatena com ffmpeg. Retorna o caminho do vídeo final.
 
-    cenas_com_slides: [{"fala": "...", "asset_id": "...", "producao": "..."}, ...]
-    O campo "producao" (direção de cena, ex.: "Sorrindo, olhar confiante") é opcional
-    e, quando presente, gera motion_prompt/expressiveness específicos para aquela
-    cena — garantindo que o avatar varie gesto e expressão ao longo do vídeo em vez
-    de repetir sempre o mesmo comportamento genérico.
+    cenas_com_slides: [{"fala": "...", "asset_id": "..."}, ...]
     """
     avatar_id  = avatar_id  or os.getenv("HEYGEN_AVATAR_ID")
     voice_id   = voice_id   or os.getenv("HEYGEN_VOICE_ID")
@@ -530,15 +453,11 @@ def gerar_video_v3_multicena(
     for i, cena in enumerate(cenas_com_slides, 1):
         fala     = cena["fala"].strip()
         asset_id = cena.get("asset_id")
-        producao = cena.get("producao", "")
         if not fala:
             print(f"   ⚠️ Cena {i}/{total} sem fala — pulando")
             continue
 
-        motion_prompt_cena = _motion_prompt_da_cena(producao)
-        info_direcao = f" | direção: {producao[:60]}" if producao else ""
-        print(f"   📹 Cena {i}/{total} — {len(fala)} chars de fala{info_direcao}")
-
+        print(f"   📹 Cena {i}/{total} — {len(fala)} chars de fala")
         bg = (
             {"type": "image", "asset_id": asset_id}
             if asset_id
@@ -557,9 +476,9 @@ def gerar_video_v3_multicena(
             "script":         fala if not LIMITE_PALAVRAS else _truncar_palavras(fala, LIMITE_PALAVRAS),
             "title":          f"{disciplina} — Cena {i}/{total}",
             "aspect_ratio":   HEYGEN_ASPECT_RATIO,
-            "voice_settings": _voice_settings(),
-            "motion_prompt":  motion_prompt_cena,
-            **_campos_expressividade(producao),
+            "voice_settings": {"speed": HEYGEN_SPEED},
+            "motion_prompt":  HEYGEN_MOTION_PROMPT,
+            "expressiveness": HEYGEN_EXPRESSIVENESS,
             "engine":         {"type": HEYGEN_ENGINE},
             "background":     bg,
         }
@@ -607,13 +526,13 @@ def gerar_video_v3_multicena(
     print(f"   🔗 Concatenando {len(caminhos_cena)} vídeos...")
     r = subprocess.run(
         ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", final, "-y"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     if r.returncode != 0:
         r = subprocess.run(
             ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista,
              "-c:v", "libx264", "-c:a", "aac", final, "-y"],
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
         )
         if r.returncode != 0:
             raise RuntimeError(f"ffmpeg falhou: {r.stderr[:300]}")
@@ -740,22 +659,20 @@ def gerar_video_heygen_scenes(
         fala = cena["fala"]
         if LIMITE_PALAVRAS:
             fala = _truncar_palavras(fala, LIMITE_PALAVRAS)
-        producao = cena.get("producao", "")
 
         scene = {
             "character": {
                 "type": "avatar",
                 "avatar_id": avatar_id,
                 "avatar_style": "normal",
-                "motion_prompt": _motion_prompt_da_cena(producao),
-                "expressiveness": _expressividade_da_cena(producao),
+                "motion_prompt": HEYGEN_MOTION_PROMPT,
+                "expressiveness": HEYGEN_EXPRESSIVENESS,
             },
             "voice": {
                 "type": "text",
                 "voice_id": voice_id,
                 "input_text": fala,
                 "speed": HEYGEN_SPEED,
-                "locale": HEYGEN_VOICE_LOCALE,
             },
         }
 
@@ -916,13 +833,13 @@ def gerar_video_template_multicena(
     print(f"   🔗 Concatenando {len(caminhos_cena)} vídeos...")
     r = subprocess.run(
         ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", final, "-y"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     if r.returncode != 0:
         r = subprocess.run(
             ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista,
              "-c:v", "libx264", "-c:a", "aac", final, "-y"],
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
         )
         if r.returncode != 0:
             raise RuntimeError(f"ffmpeg falhou: {r.stderr[:300]}")
