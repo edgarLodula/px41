@@ -85,7 +85,7 @@ def _ffprobe_duracao(caminho_video: str) -> float:
     r = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "default=noprint_wrappers=1:nokey=1", caminho_video],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
     if r.returncode != 0 or not r.stdout.strip():
         raise RuntimeError(f"ffprobe falhou em {caminho_video}: {r.stderr[:300]}")
@@ -156,7 +156,7 @@ def _gerar_video_do_slide(caminho_slide: str, duracao: float, caminho_saida: str
             "-pix_fmt", "yuv420p",
             caminho_saida,
         ],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     if r.returncode != 0:
         raise RuntimeError(f"ffmpeg (slide→vídeo) falhou: {r.stderr[-500:]}")
@@ -210,7 +210,7 @@ def compor_avatar_sobre_slide(
                 "-shortest",
                 caminho_saida,
             ],
-            capture_output=True, text=True, timeout=180,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
         )
 
     r = _rodar(com_despill=APLICAR_DESPILL)
@@ -233,13 +233,13 @@ def _concatenar(caminhos: list[str], caminho_saida: str, pasta_temp: str):
 
     r = subprocess.run(
         ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", caminho_saida],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     if r.returncode != 0:
         r = subprocess.run(
             ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", lista,
              "-c:v", "libx264", "-c:a", "aac", caminho_saida],
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
         )
         if r.returncode != 0:
             raise RuntimeError(f"ffmpeg (concat) falhou: {r.stderr[-800:]}")

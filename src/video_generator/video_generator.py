@@ -77,17 +77,15 @@ def _parsear_roteiro_blocos(roteiro: str) -> list:
 def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina: str):
     """
     Orquestra a pipeline completa para um vídeo:
-      roteiro (formato Bloco/[AVATAR]) → slides PNG → upload HeyGen → vídeo multi-cenas → mp4.
+      roteiro (formato Bloco/[AVATAR]) → slides PNG → avatar HeyGen (fundo verde)
+      → composição local (avatar na lateral, sobre o slide) → mp4.
 
     Variáveis de ambiente necessárias:
       HEYGEN_API_KEY, HEYGEN_AVATAR_ID, HEYGEN_VOICE_ID
     """
     import shutil
     from src.video_generator.slides_generator import gerar_slides
-    from src.video_generator.gerador_videos_direto import (
-        _upload_slide_heygen,
-        gerar_video_v3_multicena,
-    )
+    from src.video_generator.compor_avatar_slides import gerar_video_avatar_no_canto
 
     heygen_token = os.getenv("HEYGEN_API_KEY")
     if not heygen_token:
@@ -96,36 +94,26 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
     # 1. Parsear roteiro → cenas
     cenas = _parsear_roteiro_blocos(roteiro)
 
-    # 2. Gerar slides (usados como fundo do avatar)
+    # 2. Gerar slides (fundo fixo da cena; o avatar é composto por cima, na lateral)
     print(f"   Gerando {len(cenas)} slide(s) em: {pasta_slides}")
     caminhos_slides = gerar_slides(cenas, pasta_slides, disciplina)
 
-    # 3. Upload dos slides; fallback para fundo sólido se falhar
-    print(f"   Fazendo upload de {len(caminhos_slides)} slide(s) para HeyGen...")
-    cenas_para_video = []
-    for cena, caminho_slide in zip(cenas, caminhos_slides):
-        fala = cena.get("fala", "").strip()
-        if not fala:
-            continue
-        try:
-            asset_id = _upload_slide_heygen(caminho_slide, heygen_token)
-            print(f"      {os.path.basename(caminho_slide)} → asset_id: {asset_id}")
-        except Exception as e:
-            print(f"      [AVISO] Upload falhou ({e}). Cena usará fundo sólido.")
-            asset_id = None
-        cenas_para_video.append({"fala": fala, "asset_id": asset_id})
-
+    cenas_para_video = [
+        {"fala": cena.get("fala", "").strip(), "slide_path": slide}
+        for cena, slide in zip(cenas, caminhos_slides)
+        if cena.get("fala", "").strip()
+    ]
     if not cenas_para_video:
         raise ValueError("Nenhuma cena com fala encontrada no roteiro.")
 
-    # 4. Gerar vídeo multi-cenas via v3 (polling e download já internos)
+    # 3. Avatar no HeyGen (fundo verde) + composição local na lateral do slide
     pasta_video = os.path.dirname(caminho_saida)
     if pasta_video:
         os.makedirs(pasta_video, exist_ok=True)
 
-    print(f"   🎬 Gerando {len(cenas_para_video)} cena(s) via HeyGen v3...")
-    caminho_temp = gerar_video_v3_multicena(
-        cenas_com_slides=cenas_para_video,
+    print(f"   🎬 Gerando {len(cenas_para_video)} cena(s) com avatar na lateral...")
+    caminho_temp = gerar_video_avatar_no_canto(
+        cenas=cenas_para_video,
         disciplina=disciplina,
         heygen_token=heygen_token,
         avatar_id=os.getenv("HEYGEN_AVATAR_ID"),
@@ -133,7 +121,7 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
         pasta_temp=pasta_video,
     )
 
-    # 5. Mover para o destino final se necessário
+    # 4. Mover para o destino final se necessário
     if os.path.abspath(caminho_temp) != os.path.abspath(caminho_saida):
         shutil.move(caminho_temp, caminho_saida)
     print(f"   ✅ Vídeo salvo: {caminho_saida}")

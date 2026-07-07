@@ -33,9 +33,19 @@ LIMITE_PALAVRAS_MD  = None  # None = usa o markdown completo como contexto
 HEYGEN_BASE_URL       = "https://api.heygen.com"
 HEYGEN_ASPECT_RATIO   = "16:9"
 HEYGEN_ENGINE         = "avatar_iv"       # "avatar_iv" (padrão) | "avatar_v" (melhor qualidade)
-HEYGEN_SPEED          = 1.0               # 0.5–2.0
-HEYGEN_EXPRESSIVENESS = "medium"          # "low" | "medium" | "high"
-HEYGEN_MOTION_PROMPT  = "calm, professional, occasional hand gestures while teaching"
+HEYGEN_SPEED = float(os.getenv("HEYGEN_SPEED", "1.0"))              # 0.5–2.0
+HEYGEN_EXPRESSIVENESS = os.getenv("HEYGEN_EXPRESSIVENESS", "high")   # "low" | "medium" | "high"
+HEYGEN_MOTION_PROMPT  = os.getenv("HEYGEN_MOTION_PROMPT", (
+    "warm, confident instructor with natural human body language: "
+    "uses both hands expressively and fluidly to emphasize key points, "
+    "open-palm gestures while explaining concepts, occasional finger-counting "
+    "when listing items, subtle shifts in posture and weight between sentences, "
+    "natural head tilts and nods on important words, expressive eyebrows and "
+    "genuine smiles, brief thoughtful pauses with eyes slightly raised before "
+    "continuing, frequent natural eye contact with the camera, relaxed shoulders, "
+    "varied gesture timing and amplitude so the movement never feels repetitive "
+    "or robotic — like a real teacher speaking spontaneously"
+))
 HEYGEN_BG_ASSET_ID    = os.getenv("HEYGEN_BG_ASSET_ID", "")
 HEYGEN_BG_COLOR       = "#1a2744"         # fallback: azul escuro neutro
 OPENAI_MODEL          = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -369,6 +379,7 @@ def gerar_video_heygen(
     heygen_token: str,
     avatar_id:    str | None = None,
     voice_id:     str | None = None,
+    motion_prompt: str | None = None
 ) -> str:
     """
     Envia uma fala para HeyGen v3 e retorna o video_id.
@@ -393,8 +404,10 @@ def gerar_video_heygen(
         "script":        fala if not LIMITE_PALAVRAS else _truncar_palavras(fala, LIMITE_PALAVRAS),
         "title":         disciplina,
         "aspect_ratio":  HEYGEN_ASPECT_RATIO,
-        "voice_settings": {"speed": HEYGEN_SPEED},
-        "motion_prompt": HEYGEN_MOTION_PROMPT,
+        "voice_settings": {
+            "speed": HEYGEN_SPEED,
+            "locale":os.getenv("HEYGEN_VOICE_LOCALE","pt-BR")},
+        "motion_prompt": motion_prompt or HEYGEN_MOTION_PROMPT,
         "expressiveness": HEYGEN_EXPRESSIVENESS,
         "engine":        {"type": HEYGEN_ENGINE},
         "background":    (
@@ -476,9 +489,11 @@ def gerar_video_v3_multicena(
             "script":         fala if not LIMITE_PALAVRAS else _truncar_palavras(fala, LIMITE_PALAVRAS),
             "title":          f"{disciplina} — Cena {i}/{total}",
             "aspect_ratio":   HEYGEN_ASPECT_RATIO,
-            "voice_settings": {"speed": HEYGEN_SPEED},
-            "motion_prompt":  HEYGEN_MOTION_PROMPT,
-            "expressiveness": HEYGEN_EXPRESSIVENESS,
+            "voice_settings": {
+            "speed": HEYGEN_SPEED,
+            "locale":os.getenv("HEYGEN_VOICE_LOCALE","pt-BR")},
+            "motion_prompt": cena.get("motion_prompt") or HEYGEN_MOTION_PROMPT,
+            "expressiveness": cena.get("expressiveness") or HEYGEN_EXPRESSIVENESS,
             "engine":         {"type": HEYGEN_ENGINE},
             "background":     bg,
         }
@@ -639,6 +654,7 @@ def gerar_video_heygen_scenes(
     heygen_token: str,
     avatar_id: str | None = None,
     voice_id: str | None = None,
+    
 ) -> str:
     """
     Cria vídeo multi-cenas no HeyGen (v2 Studio API).
@@ -665,14 +681,15 @@ def gerar_video_heygen_scenes(
                 "type": "avatar",
                 "avatar_id": avatar_id,
                 "avatar_style": "normal",
-                "motion_prompt": HEYGEN_MOTION_PROMPT,
-                "expressiveness": HEYGEN_EXPRESSIVENESS,
+                "motion_prompt": cena.get("motion_prompt") or HEYGEN_MOTION_PROMPT,
+                "expressiveness": cena.get("expressiveness") or HEYGEN_EXPRESSIVENESS,
             },
             "voice": {
                 "type": "text",
                 "voice_id": voice_id,
                 "input_text": fala,
                 "speed": HEYGEN_SPEED,
+                "locale":os.getenv("HEYGEN_VOICE_LOCALE","pt-BR")
             },
         }
 

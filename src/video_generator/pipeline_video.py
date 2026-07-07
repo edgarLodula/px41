@@ -84,7 +84,7 @@ def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGe
                     raise ValueError("Nenhuma fala encontrada no roteiro gerado.")
 
                 video_id = gerar_video_heygen(fala, disciplina, heyGen_token)
-                info = aguardar_video(video_id, heyGen_token)
+                info = aguardar_video(video_id, heyGen_token, max_min=10.0)
 
                 video_url = info.get("video_url")
                 if not video_url:

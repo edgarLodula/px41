@@ -668,7 +668,7 @@ def _gerar_video_em_background(job_id: str):
         for disc in disciplinas_selecionadas:
             disciplina = disc.get("disciplina", "Disciplina")
             cenas_com_fala = [
-                {"fala": c["fala"], "producao": c.get("producao", "")}
+                {"fala": c["fala"], "motion_prompt": c.get("producao", "")}
                 for c in disc.get("cenas", [])
                 if c.get("fala")
             ]
