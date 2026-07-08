@@ -82,6 +82,21 @@ def _posicao_overlay(posicao: str, margem: int) -> tuple[str, str]:
     return posicoes[posicao]
 
 
+def _zona_avatar_horizontal(posicao: str, largura_rel: float, margem: int) -> tuple[str | None, int]:
+    """
+    Retorna (lado, largura_reservada_px) da faixa horizontal ocupada pelo
+    avatar no rodapé, pra a legenda poder evitá-la (ver legendas.py).
+    lado=None quando o avatar não compete com uma legenda no rodapé
+    (posições "centro" ou "-cima").
+    """
+    if posicao == "centro" or "cima" in posicao:
+        return None, 0
+    largura_avatar = int(SAIDA_LARGURA * largura_rel)
+    reservado = largura_avatar + margem + 40  # +40px de respiro
+    lado = "direita" if "direita" in posicao else "esquerda"
+    return lado, reservado
+
+
 def _ffprobe_duracao(caminho_video: str) -> float:
     r = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -338,9 +353,12 @@ def gerar_video_avatar_no_canto(
             print("   ⚠️ OPENAI_API_KEY ausente — pulando legenda.")
         else:
             caminho_legendado = os.path.join(pasta_temp, f"{nome_saida}_legendado.mp4")
+            lado, reservado = _zona_avatar_horizontal(posicao, AVATAR_LARGURA_REL, AVATAR_MARGEM_PX)
             try:
                 caminho_saida = adicionar_legendas(
                     caminho_saida, caminho_legendado, openai_token, prompt_contexto,
+                    evitar_lado=lado, reservar_px=reservado,
+                    largura_video=SAIDA_LARGURA, altura_video=SAIDA_ALTURA,
                 )
             except Exception as e:
                 print(f"   ⚠️ Falha ao gerar legenda ({e}) — mantendo vídeo sem legenda.")
