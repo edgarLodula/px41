@@ -15,7 +15,7 @@ MARCADOR         = "•"    # "▸" não existe na maioria das fontes de fallbac
 # Avatar sobreposto (PiP) no canto inferior do vídeo final (ver
 # compor_avatar_slides.AVATAR_POSICAO/AVATAR_LARGURA_REL). Reservamos essa
 # faixa para o texto do slide nunca ficar escondido atrás do avatar.
-MARGEM_INFERIOR_AVATAR = 220
+MARGEM_INFERIOR_AVATAR = 320
 AVATAR_LADO            = "direita"  # "esquerda" | "direita" — deve casar com o lado usado em AVATAR_POSICAO
 
 TIPO_LISTA        = "lista"
