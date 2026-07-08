@@ -39,7 +39,7 @@ LEGENDA_TAMANHO     = 30
 LEGENDA_COR_TEXTO   = "&H00E8E8E8"   # branco giz (BGR invertido, ASS)
 LEGENDA_COR_FUNDO   = "&H80000000"   # preto ~50% opaco (caixa atrás do texto)
 LEGENDA_MARGEM_V    = 100            # distância da borda inferior (px) — livre do rodapé do slide
-LEGENDA_MARGEM_LR   = 40             # margem lateral (px)
+LEGENDA_MARGEM_LR   = 65             # margem lateral (px) — livre da barra amarela decorativa do slide (x≈38-46)
 # ───────────────────────────────────────────────────────────────────────────────
 
 
