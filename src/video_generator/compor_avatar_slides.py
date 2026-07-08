@@ -40,6 +40,7 @@ from src.video_generator.gerador_videos_direto import (
     HEYGEN_SPEED,
     aguardar_video,
 )
+from src.video_generator.legendas import adicionar_legendas
 
 # ─── CONFIGURAÇÃO DE POSICIONAMENTO DO AVATAR ─────────────────────────────────
 AVATAR_POSICAO      = "direita-baixo"  # direita | direita-baixo | direita-cima | esquerda | esquerda-baixo | esquerda-cima | centro
@@ -250,13 +251,16 @@ def _concatenar(caminhos: list[str], caminho_saida: str, pasta_temp: str):
 # =============================================================================
 
 def gerar_video_avatar_no_canto(
-    cenas:        list[dict],
-    disciplina:   str,
-    heygen_token: str,
-    avatar_id:    str | None = None,
-    voice_id:     str | None = None,
-    posicao:      str = AVATAR_POSICAO,
-    pasta_temp:   str | None = None,
+    cenas:            list[dict],
+    disciplina:       str,
+    heygen_token:     str,
+    avatar_id:        str | None = None,
+    voice_id:         str | None = None,
+    posicao:          str = AVATAR_POSICAO,
+    pasta_temp:       str | None = None,
+    adicionar_legenda: bool = True,
+    openai_token:     str | None = None,
+    prompt_contexto:  str = "",
 ) -> str:
     """
     cenas: [{"fala": str, "slide_path": str}, ...]
@@ -264,7 +268,9 @@ def gerar_video_avatar_no_canto(
 
     Para cada cena: gera o avatar no HeyGen (fundo verde) → baixa → cria vídeo
     do slide com a mesma duração → sobrepõe o avatar (sem fundo) no canto
-    `posicao`. Concatena tudo e retorna o caminho do vídeo final.
+    `posicao`. Concatena tudo e, por padrão, transcreve o áudio (Whisper) e
+    queima a legenda no vídeo final (ver src/video_generator/legendas.py).
+    Retorna o caminho do vídeo final.
     """
     _checar_binarios()
 
@@ -325,6 +331,20 @@ def gerar_video_avatar_no_canto(
         _concatenar(caminhos_cena_final, caminho_saida, pasta_temp)
 
     print(f"   ✅ Vídeo final: {caminho_saida}")
+
+    if adicionar_legenda:
+        openai_token = openai_token or os.getenv("OPENAI_API_KEY")
+        if not openai_token:
+            print("   ⚠️ OPENAI_API_KEY ausente — pulando legenda.")
+        else:
+            caminho_legendado = os.path.join(pasta_temp, f"{nome_saida}_legendado.mp4")
+            try:
+                caminho_saida = adicionar_legendas(
+                    caminho_saida, caminho_legendado, openai_token, prompt_contexto,
+                )
+            except Exception as e:
+                print(f"   ⚠️ Falha ao gerar legenda ({e}) — mantendo vídeo sem legenda.")
+
     return caminho_saida
 
 

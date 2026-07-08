@@ -119,6 +119,8 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
         avatar_id=os.getenv("HEYGEN_AVATAR_ID"),
         voice_id=os.getenv("HEYGEN_VOICE_ID"),
         pasta_temp=pasta_video,
+        openai_token=os.getenv("OPENAI_API_KEY"),
+        prompt_contexto=f"{disciplina}. " + os.getenv("SLIDES_MD_CONTEXT", "")[:600],
     )
 
     # 4. Mover para o destino final se necessário
