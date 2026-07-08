@@ -10,7 +10,13 @@ BG_COLOR         = (26, 42, 26)       # verde lousa escuro
 TEXT_COLOR       = (232, 232, 208)    # branco giz (levemente amarelado)
 ACCENT_COLOR     = (255, 235, 59)     # amarelo giz
 SUBTITLE_COLOR   = (180, 180, 155)    # giz apagado
-MARCADOR         = "▸"    
+MARCADOR         = "•"    # "▸" não existe na maioria das fontes de fallback (ex.: Calibri) e aparecia como tofu (☐)
+
+# Avatar sobreposto (PiP) no canto inferior do vídeo final (ver
+# compor_avatar_slides.AVATAR_POSICAO/AVATAR_LARGURA_REL). Reservamos essa
+# faixa para o texto do slide nunca ficar escondido atrás do avatar.
+MARGEM_INFERIOR_AVATAR = 220
+AVATAR_LADO            = "direita"  # "esquerda" | "direita" — deve casar com o lado usado em AVATAR_POSICAO
 
 TIPO_LISTA        = "lista"
 TIPO_ABERTURA     = "abertura"
@@ -184,13 +190,27 @@ def _icone_disc(draw, disciplina, cx, cy, raio=22):
     draw.text((cx - tw // 2, cy - th // 2 - 1), abrev, font=fonte, fill=BG_COLOR)
 
 
+def _texto_escola(draw, x0, x_max, altura, fonte_escola):
+    """Assinatura 'Escola Técnica San Marino', do lado oposto ao avatar (ver AVATAR_LADO)."""
+    texto = "Escola Técnica San Marino"
+    y = altura - 58
+    if AVATAR_LADO == "direita":
+        draw.text((x0, y), texto, font=fonte_escola, fill=ACCENT_COLOR)
+    else:
+        bbox = draw.textbbox((0, 0), texto, font=fonte_escola)
+        draw.text((x_max - (bbox[2] - bbox[0]), y), texto, font=fonte_escola, fill=ACCENT_COLOR)
+
+
 def _rodape(draw, disciplina, numero, total, x0, x_max, altura):
+    """Rodapé fica do lado oposto ao avatar (ver AVATAR_LADO), pra não ficar escondido atrás dele."""
     fonte = _carregar_fonte(18)
     y = altura - 36
-    draw.text((x0, y), disciplina, font=fonte, fill=SUBTITLE_COLOR)
-    prog = f"{numero} / {total}"
-    bbox = draw.textbbox((0, 0), prog, font=fonte)
-    draw.text((x_max - (bbox[2] - bbox[0]), y), prog, font=fonte, fill=SUBTITLE_COLOR)
+    texto = f"{disciplina}   •   {numero} / {total}"
+    if AVATAR_LADO == "direita":
+        draw.text((x0, y), texto, font=fonte, fill=SUBTITLE_COLOR)
+    else:
+        bbox = draw.textbbox((0, 0), texto, font=fonte)
+        draw.text((x_max - (bbox[2] - bbox[0]), y), texto, font=fonte, fill=SUBTITLE_COLOR)
 
 
 def _titulo_linha(draw, titulo, x0, x_max, y_start, fonte_titulo):
@@ -260,7 +280,7 @@ def _layout_lista(img, draw, titulo, topicos, destaque, disciplina, numero, tota
     _desenhar_tag(draw, destaque, x_max, 28)
     y = _titulo_linha(draw, titulo, x0, x_max, 56, _carregar_fonte(44, negrito=True))
     _bullets(
-        draw, topicos, destaque, x0, x_max, y, altura - 56 - y,
+        draw, topicos, destaque, x0, x_max, y, altura - MARGEM_INFERIOR_AVATAR - y,
         _carregar_fonte(30), _carregar_fonte(30, negrito=True), _carregar_fonte(32, negrito=True),
     )
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
@@ -304,7 +324,7 @@ def _layout_abertura(img, draw, titulo, topicos, destaque, disciplina, numero, t
             draw.text((x0 + marc_w, y), linha, font=fonte_bullet, fill=SUBTITLE_COLOR)
             y += 30
 
-    draw.text((x0, altura - 58), "Escola Técnica San Marino", font=fonte_escola, fill=ACCENT_COLOR)
+    _texto_escola(draw, x0, x_max, altura, fonte_escola)
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
 
 
@@ -326,7 +346,7 @@ def _layout_encerramento(img, draw, titulo, topicos, destaque, disciplina, numer
             y += 34
         y += 8
 
-    draw.text((x0, altura - 58), "Escola Técnica San Marino", font=fonte_escola, fill=ACCENT_COLOR)
+    _texto_escola(draw, x0, x_max, altura, fonte_escola)
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
 
 
@@ -427,7 +447,7 @@ def _layout_numero(img, draw, titulo, topicos, destaque, disciplina, numero, tot
     else:
         # Sem número detectado: fallback para lista
         _bullets(
-            draw, topicos, destaque, x0, x_max, y, altura - 56 - y,
+            draw, topicos, destaque, x0, x_max, y, altura - MARGEM_INFERIOR_AVATAR - y,
             _carregar_fonte(30), _carregar_fonte(30, negrito=True), _carregar_fonte(32, negrito=True),
         )
 
@@ -447,9 +467,11 @@ _LAYOUTS = {
 
 
 def _gerar_slide_cena(cena, caminho_saida, disciplina, conteudo=None, numero=1, total=1):
-    """Gera 1 slide PNG. Conteúdo na metade esquerda — direita livre para avatar."""
+    """Gera 1 slide PNG. Conteúdo ocupa quase a tela toda — o avatar é um PiP
+    sobreposto no canto inferior esquerdo (ver compor_avatar_slides.py), por
+    isso o texto usa MARGEM_INFERIOR_AVATAR para não ficar atrás dele."""
     largura, altura = 1280, 720
-    area_w = int(largura * 0.58)
+    area_w = int(largura * 0.97)
     x0, x_max = 70, area_w - 30
 
         # Fundo lousa com textura de giz

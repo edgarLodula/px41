@@ -42,9 +42,9 @@ from src.video_generator.gerador_videos_direto import (
 )
 
 # ─── CONFIGURAÇÃO DE POSICIONAMENTO DO AVATAR ─────────────────────────────────
-AVATAR_POSICAO      = "direita"   # direita | direita-baixo | direita-cima | esquerda | esquerda-baixo | esquerda-cima | centro
-AVATAR_LARGURA_REL  = 0.42        # largura do avatar em relação à largura final (0.42 = mesma faixa livre do slide)
-AVATAR_MARGEM_PX    = 0           # distância entre o avatar e a borda do frame
+AVATAR_POSICAO      = "direita-baixo"  # direita | direita-baixo | direita-cima | esquerda | esquerda-baixo | esquerda-cima | centro
+AVATAR_LARGURA_REL  = 0.30        # largura do avatar em relação à largura final (PiP no canto; slide ocupa o resto)
+AVATAR_MARGEM_PX    = 20          # distância entre o avatar e a borda do frame
 CHROMA_COR_HEYGEN   = "#00FF00"   # cor de fundo pedida ao HeyGen (chroma key)
 CHROMA_SIMILARIDADE = 0.12        # tolerância do colorkey (0.0–1.0)
 CHROMA_BLEND        = 0.08        # suavização da borda do recorte (0.0–1.0)
