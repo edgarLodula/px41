@@ -129,6 +129,76 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
     print(f"   ✅ Vídeo salvo: {caminho_saida}")
 
 
+def gerar_video_com_slides(
+    cenas:          list[dict],
+    disciplina:     str,
+    caminho_saida:  str,
+    pasta_slides:   str,
+    heygen_token:   str,
+    openai_token:   str | None = None,
+    avatar_id:      str | None = None,
+    voice_id:       str | None = None,
+) -> str:
+    """
+    Gera o vídeo completo (slides + avatar recortado/posicionado no canto +
+    legenda) a partir de cenas JÁ ESTRUTURADAS — o formato que
+    `gerador_videos_direto.parsear_cenas_do_roteiro()` devolve:
+    [{"numero", "nome", "producao", "angulo", "texto_na_tela", "fala"}, ...]
+
+    Usado pelos dois fluxos de geração de vídeo da api.py (upload/approve e
+    /gerador-videos/*), que já têm o roteiro parseado nesse formato — evita
+    serializar de volta pra texto e reparsear com `_parsear_roteiro_blocos`
+    (que espera um formato de roteiro diferente, "Bloco N"/"[AVATAR]").
+    """
+    import shutil
+    from src.video_generator.slides_generator import gerar_slides
+    from src.video_generator.compor_avatar_slides import gerar_video_avatar_no_canto
+
+    if not heygen_token:
+        raise ValueError("HEYGEN_API_KEY não configurada.")
+
+    cenas_slides = [
+        {
+            "fala":   (c.get("fala") or "").strip(),
+            "visual": (c.get("producao") or c.get("angulo") or "").strip(),
+            "texto":  (c.get("texto_na_tela") or "").strip(),
+        }
+        for c in cenas
+        if (c.get("fala") or "").strip()
+    ]
+    if not cenas_slides:
+        raise ValueError(f"Nenhuma cena com fala encontrada para '{disciplina}'.")
+
+    print(f"   Gerando {len(cenas_slides)} slide(s) em: {pasta_slides}")
+    caminhos_slides = gerar_slides(cenas_slides, pasta_slides, disciplina)
+
+    cenas_para_video = [
+        {"fala": cena["fala"], "slide_path": slide}
+        for cena, slide in zip(cenas_slides, caminhos_slides)
+    ]
+
+    pasta_video = os.path.dirname(caminho_saida)
+    if pasta_video:
+        os.makedirs(pasta_video, exist_ok=True)
+
+    print(f"   🎬 Gerando {len(cenas_para_video)} cena(s) com avatar na lateral...")
+    caminho_temp = gerar_video_avatar_no_canto(
+        cenas=cenas_para_video,
+        disciplina=disciplina,
+        heygen_token=heygen_token,
+        avatar_id=avatar_id or os.getenv("HEYGEN_AVATAR_ID"),
+        voice_id=voice_id or os.getenv("HEYGEN_VOICE_ID"),
+        pasta_temp=pasta_video or None,
+        openai_token=openai_token or os.getenv("OPENAI_API_KEY"),
+        prompt_contexto=f"{disciplina}.",
+    )
+
+    if os.path.abspath(caminho_temp) != os.path.abspath(caminho_saida):
+        shutil.move(caminho_temp, caminho_saida)
+    print(f"   ✅ Vídeo salvo: {caminho_saida}")
+    return caminho_saida
+
+
 def configurar_openai():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:

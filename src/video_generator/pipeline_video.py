@@ -1,15 +1,11 @@
 import os
 import re
 
-import requests
-
 from src.video_generator.gerador_videos_direto import (
-    aguardar_video,
-    extrair_falas_do_roteiro,
     gerar_roteiro,
-    gerar_video_heygen,
     parsear_cenas_do_roteiro,
 )
+from src.video_generator.video_generator import gerar_video_com_slides
 
 
 def _slug(nome: str) -> str:
@@ -17,18 +13,12 @@ def _slug(nome: str) -> str:
     return slug.strip("_") or "disciplina"
 
 
-def _baixar_video(video_url: str, caminho_saida: str):
-    resp = requests.get(video_url, timeout=60)
-    resp.raise_for_status()
-    with open(caminho_saida, "wb") as f:
-        f.write(resp.content)
-
-
 def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGen_token):
     """
     Gera videos por disciplina a partir dos markdowns ja produzidos pela pipeline.
 
-    Fluxo: markdown -> roteiro -> cenas -> falas -> HeyGen v3 -> download mp4
+    Fluxo: markdown -> roteiro -> cenas -> slides + avatar (recortado/posicionado
+    no canto) + legenda queimada -> mp4 (mesmo pipeline usado em test_video_um.py).
     """
     if not openai_token:
         raise ValueError("OPENAI_API_KEY nao configurada.")
@@ -62,35 +52,26 @@ def gerar_videos_por_disciplina(pasta_markdown, pasta_saida, openai_token, heyGe
                 os.makedirs(pasta_disciplina, exist_ok=True)
 
                 caminho_video = os.path.join(pasta_disciplina, "video.mp4")
+                pasta_slides = os.path.join(pasta_disciplina, "slides")
 
                 with open(caminho_md, "r", encoding="utf-8") as f:
                     markdown = f.read()
 
                 roteiro = gerar_roteiro(markdown, disciplina, openai_token)
-                cenas = parsear_cenas_do_roteiro(roteiro)
-                falas = extrair_falas_do_roteiro(cenas)
+                disciplinas_parseadas = parsear_cenas_do_roteiro(roteiro)
 
-                fala = falas.get(disciplina)
-                if not fala and falas:
-                    fala = next(iter(falas.values()))
-                if not fala:
-                    fala = " ".join(
-                        cena.get("fala", "")
-                        for grupo in cenas
-                        for cena in grupo.get("cenas", [])
-                        if cena.get("fala")
-                    ).strip()
-                if not fala:
-                    raise ValueError("Nenhuma fala encontrada no roteiro gerado.")
+                cenas = disciplinas_parseadas[0]["cenas"] if disciplinas_parseadas else []
+                if not cenas:
+                    raise ValueError("Nenhuma cena com fala encontrada no roteiro gerado.")
 
-                video_id = gerar_video_heygen(fala, disciplina, heyGen_token)
-                info = aguardar_video(video_id, heyGen_token, max_min=10.0)
-
-                video_url = info.get("video_url")
-                if not video_url:
-                    raise RuntimeError(f"HeyGen concluiu sem video_url: {info}")
-
-                _baixar_video(video_url, caminho_video)
+                gerar_video_com_slides(
+                    cenas=cenas,
+                    disciplina=disciplina,
+                    caminho_saida=caminho_video,
+                    pasta_slides=pasta_slides,
+                    heygen_token=heyGen_token,
+                    openai_token=openai_token,
+                )
 
                 print(f"   Finalizado: {caminho_video}")
 

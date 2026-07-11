@@ -53,6 +53,18 @@ APLICAR_DESPILL     = True        # remove reflexo verde residual na borda do av
 SAIDA_LARGURA       = 1280
 SAIDA_ALTURA        = 720
 SAIDA_FPS           = 25
+
+# Recorte do avatar bruto (1280x720, corpo inteiro) pra mostrar só do tronco
+# pra cima — o cliente topou essa versão já que mexer nas pernas não é viável.
+# Valores calibrados olhando o frame cru do HeyGen: a "cena" (sala + pessoa)
+# ocupa o miolo do frame (x≈280–999), o resto nas laterais é o verde de
+# padding. Cortamos verticalmente até um pouco abaixo da altura das mãos,
+# que é onde ela gesticula ao falar.
+AVATAR_RECORTE_TRONCO = True      # False = volta a mostrar o corpo inteiro
+AVATAR_RECORTE_X      = 260
+AVATAR_RECORTE_Y      = 0
+AVATAR_RECORTE_W      = 760
+AVATAR_RECORTE_H      = 450
 # ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -183,9 +195,14 @@ def _gerar_video_do_slide(caminho_slide: str, duracao: float, caminho_saida: str
 # =============================================================================
 
 def _montar_filtro(largura_avatar: int, x_expr: str, y_expr: str,
-                    cor_chroma_0x: str, com_despill: bool) -> str:
-    cadeia_avatar = (
-        f"[1:v]format=yuva420p,"
+                    cor_chroma_0x: str, com_despill: bool,
+                    recorte: tuple[int, int, int, int] | None = None) -> str:
+    cadeia_avatar = "[1:v]"
+    if recorte:
+        cw, ch, cx, cy = recorte
+        cadeia_avatar += f"crop={cw}:{ch}:{cx}:{cy},"
+    cadeia_avatar += (
+        f"format=yuva420p,"
         f"colorkey={cor_chroma_0x}:{CHROMA_SIMILARIDADE}:{CHROMA_BLEND}"
     )
     if com_despill:
@@ -211,9 +228,13 @@ def compor_avatar_sobre_slide(
     largura_avatar = int(SAIDA_LARGURA * largura_rel)
     x_expr, y_expr = _posicao_overlay(posicao, margem)
     cor_chroma_0x = _hex_para_0x(cor_chroma)
+    recorte = (
+        (AVATAR_RECORTE_W, AVATAR_RECORTE_H, AVATAR_RECORTE_X, AVATAR_RECORTE_Y)
+        if AVATAR_RECORTE_TRONCO else None
+    )
 
     def _rodar(com_despill: bool):
-        filtro = _montar_filtro(largura_avatar, x_expr, y_expr, cor_chroma_0x, com_despill)
+        filtro = _montar_filtro(largura_avatar, x_expr, y_expr, cor_chroma_0x, com_despill, recorte)
         return subprocess.run(
             [
                 "ffmpeg", "-y",

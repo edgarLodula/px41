@@ -32,7 +32,6 @@ import io
 import os
 import re
 import json
-import shutil
 import zipfile
 import tempfile
 import threading
@@ -57,9 +56,9 @@ from src.video_generator.gerador_videos_direto import (
     extrair_markdown_do_pdf,
     gerar_roteiro,
     parsear_cenas_do_roteiro,
-    gerar_video_v3_multicena,
     verificar_status_video,
 )
+from src.video_generator.video_generator import gerar_video_com_slides
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -638,16 +637,14 @@ def _gerar_cenas_em_background(job_id: str):
 
 def _gerar_video_em_background(job_id: str):
     """
-    Etapa 7: gera o vídeo no HeyGen v3 para cada disciplina selecionada.
-
-    Cada cena aprovada (abertura/desenvolvimento/encerramento) vira uma chamada
-    HeyGen independente, com motion_prompt/expressiveness derivados da direção
-    [PRODUCAO] daquela cena, e os vídeos são concatenados no final. Isso evita
-    juntar todas as falas em um único texto corrido — que gerava um vídeo com
-    uma única expressão estática do início ao fim.
+    Etapa 7: gera o vídeo completo para cada disciplina selecionada — slides
+    (PNG por cena) + avatar HeyGen recortado (tronco pra cima) e posicionado
+    no canto + legenda queimada. Mesmo pipeline usado em test_video_um.py
+    (ver video_generator.gerar_video_com_slides / compor_avatar_slides.py).
     """
     job          = _jobs[job_id]
     heygen_token = os.getenv("HEYGEN_API_KEY")
+    openai_token = os.getenv("OPENAI_API_KEY")
     pasta        = _pasta_job(job_id)
     pasta_videos = pasta / "videos"
     pasta_videos.mkdir(exist_ok=True)
@@ -667,29 +664,25 @@ def _gerar_video_em_background(job_id: str):
         videos = []
         for disc in disciplinas_selecionadas:
             disciplina = disc.get("disciplina", "Disciplina")
-            cenas_com_fala = [
-                {"fala": c["fala"], "motion_prompt": c.get("producao", "")}
-                for c in disc.get("cenas", [])
-                if c.get("fala")
-            ]
-            if not cenas_com_fala:
+            cenas = [c for c in disc.get("cenas", []) if c.get("fala")]
+            if not cenas:
                 print(f"   [AVISO] Disciplina '{disciplina}' sem falas — pulando")
                 continue
 
             slug             = re.sub(r"[^\w]", "_", disciplina)[:60]
             pasta_disciplina = pasta_videos / slug
             pasta_disciplina.mkdir(exist_ok=True)
-
-            caminho_gerado = gerar_video_v3_multicena(
-                cenas_com_slides=cenas_com_fala,
-                disciplina=disciplina,
-                heygen_token=heygen_token,
-                pasta_temp=str(pasta_disciplina),
-            )
+            pasta_slides     = pasta_disciplina / "slides"
 
             caminho_video = str(pasta_videos / f"{slug}.mp4")
-            if os.path.abspath(caminho_gerado) != os.path.abspath(caminho_video):
-                shutil.copyfile(caminho_gerado, caminho_video)
+            gerar_video_com_slides(
+                cenas=cenas,
+                disciplina=disciplina,
+                caminho_saida=caminho_video,
+                pasta_slides=str(pasta_slides),
+                heygen_token=heygen_token,
+                openai_token=openai_token,
+            )
 
             videos.append({
                 "disciplina":    disciplina,
