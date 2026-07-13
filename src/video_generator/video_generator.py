@@ -99,7 +99,7 @@ def gerar_video(roteiro: str, caminho_saida: str, pasta_slides: str, disciplina:
     caminhos_slides = gerar_slides(cenas, pasta_slides, disciplina)
 
     cenas_para_video = [
-        {"fala": cena.get("fala", "").strip(), "slide_path": slide}
+        {"fala": cena.get("fala", "").strip(), "slide_path": slide, "tipo": cena.get("tipo", "conteudo")}
         for cena, slide in zip(cenas, caminhos_slides)
         if cena.get("fala", "").strip()
     ]
@@ -162,6 +162,7 @@ def gerar_video_com_slides(
             "fala":   (c.get("fala") or "").strip(),
             "visual": (c.get("producao") or c.get("angulo") or "").strip(),
             "texto":  (c.get("texto_na_tela") or "").strip(),
+            "tipo":   (c.get("tipo") or "conteudo").lower(),
         }
         for c in cenas
         if (c.get("fala") or "").strip()
@@ -173,7 +174,7 @@ def gerar_video_com_slides(
     caminhos_slides = gerar_slides(cenas_slides, pasta_slides, disciplina)
 
     cenas_para_video = [
-        {"fala": cena["fala"], "slide_path": slide}
+        {"fala": cena["fala"], "slide_path": slide, "tipo": cena.get("tipo", "conteudo")}
         for cena, slide in zip(cenas_slides, caminhos_slides)
     ]
 

@@ -31,6 +31,7 @@ import uuid
 
 import requests
 
+from src.video_generator.audio_generator import gerar_audio_openai_tts
 from src.video_generator.gerador_videos_direto import (
     HEYGEN_ASPECT_RATIO,
     HEYGEN_BASE_URL,
@@ -39,6 +40,7 @@ from src.video_generator.gerador_videos_direto import (
     HEYGEN_MOTION_PROMPT,
     HEYGEN_SPEED,
     aguardar_video,
+    gerar_video_heygen,
 )
 from src.video_generator.legendas import adicionar_legendas
 
@@ -173,6 +175,31 @@ def gerar_avatar_chroma_key(
 # ETAPA 2 — SLIDE (PNG) → VÍDEO ESTÁTICO COM A DURAÇÃO DO CLIPE DO AVATAR
 # =============================================================================
 
+def _gerar_video_slide_com_audio(caminho_slide: str, caminho_audio: str, caminho_saida: str):
+    """
+    Combina um slide PNG estático com um arquivo de áudio (MP3/WAV) em um MP4.
+    Usado nas cenas de conteúdo, onde não há avatar — apenas narração OpenAI TTS
+    sobre o slide, sem nenhuma chamada ao HeyGen.
+    """
+    r = subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-loop", "1", "-i", caminho_slide,
+            "-i", caminho_audio,
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-vf", f"scale={SAIDA_LARGURA}:{SAIDA_ALTURA}",
+            "-r", str(SAIDA_FPS),
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            caminho_saida,
+        ],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg (slide+audio→vídeo) falhou: {r.stderr[-500:]}")
+
+
 def _gerar_video_do_slide(caminho_slide: str, duracao: float, caminho_saida: str):
     r = subprocess.run(
         [
@@ -299,13 +326,19 @@ def gerar_video_avatar_no_canto(
     prompt_contexto:  str = "",
 ) -> str:
     """
-    cenas: [{"fala": str, "slide_path": str}, ...]
+    cenas: [{"fala": str, "slide_path": str, "tipo": str}, ...]
+           tipo      = "intro" | "conteudo" | "outro"  (padrão: "conteudo")
            slide_path = PNG já gerado (ex.: via slides_generator.gerar_slides)
+                        — ignorado para cenas intro/outro
 
-    Para cada cena: gera o avatar no HeyGen (fundo verde) → baixa → cria vídeo
-    do slide com a mesma duração → sobrepõe o avatar (sem fundo) no canto
-    `posicao`. Concatena tudo e, por padrão, transcreve o áudio (Whisper) e
-    queima a legenda no vídeo final (ver src/video_generator/legendas.py).
+    Estrutura de saída por tipo de cena:
+      - intro / outro  → avatar HeyGen full-screen (com background próprio).
+                         Apenas 2 chamadas HeyGen por aula, reduzindo custo.
+      - conteudo       → slide estático + narração OpenAI TTS, sem HeyGen,
+                         sem avatar visível.
+
+    Concatena tudo e, por padrão, transcreve o áudio (Whisper) e queima
+    a legenda no vídeo final (ver src/video_generator/legendas.py).
     Retorna o caminho do vídeo final.
     """
     _checar_binarios()
@@ -326,31 +359,59 @@ def gerar_video_avatar_no_canto(
     for i, cena in enumerate(cenas, 1):
         fala = (cena.get("fala") or "").strip()
         slide_path = cena.get("slide_path")
-        if not fala or not slide_path:
-            print(f"   ⚠️ Cena {i}/{total} sem fala/slide — pulando")
+        tipo = (cena.get("tipo") or "conteudo").lower()
+
+        if not fala:
+            print(f"   ⚠️ Cena {i}/{total} sem fala — pulando")
             continue
 
-        print(f"   🎬 Cena {i}/{total} — gerando avatar (chroma key) no HeyGen...")
-        video_id = gerar_avatar_chroma_key(
-            fala, f"{disciplina} — Cena {i}/{total}", heygen_token, avatar_id, voice_id,
-        )
-        info = aguardar_video(video_id, heygen_token, max_min=5.0)
-        if not info.get("video_url"):
-            raise RuntimeError(f"Sem video_url na cena {i}")
-
-        caminho_avatar = os.path.join(pasta_temp, f"avatar_{i:03d}.mp4")
-        _baixar_video(info["video_url"], caminho_avatar)
-        print(f"      ✅ avatar baixado: {os.path.getsize(caminho_avatar) // 1024} KB")
-
-        duracao = _ffprobe_duracao(caminho_avatar)
-        caminho_slide_video = os.path.join(pasta_temp, f"slide_{i:03d}.mp4")
-        _gerar_video_do_slide(slide_path, duracao, caminho_slide_video)
-
         caminho_final_cena = os.path.join(pasta_temp, f"cena_{i:03d}_final.mp4")
-        compor_avatar_sobre_slide(
-            caminho_avatar, caminho_slide_video, caminho_final_cena, posicao=posicao,
-        )
-        print(f"      ✅ cena composta ({posicao}): {caminho_final_cena}")
+
+        if tipo in ("intro", "outro"):
+            # ── Avatar HeyGen full-screen (sem slide, sem chroma key) ──────────
+            # Retry com até 3 tentativas — o HeyGen pode falhar silenciosamente
+            # quando há chamadas próximas para o mesmo avatar (intro + outro).
+            import time as _time
+            MAX_TENTATIVAS = 3
+            for tentativa in range(1, MAX_TENTATIVAS + 1):
+                print(f"   🎬 Cena {i}/{total} [{tipo.upper()}] — gerando avatar HeyGen full-screen"
+                      f"{f' (tentativa {tentativa}/{MAX_TENTATIVAS})' if tentativa > 1 else ''}...")
+                if tentativa > 1:
+                    espera = 20 * tentativa
+                    print(f"      ⏳ Aguardando {espera}s antes de retentar...")
+                    _time.sleep(espera)
+                try:
+                    video_id = gerar_video_heygen(
+                        fala, f"{disciplina} — {tipo.capitalize()} {i}/{total}",
+                        heygen_token, avatar_id, voice_id,
+                    )
+                    info = aguardar_video(video_id, heygen_token, max_min=5.0)
+                    if info.get("video_url"):
+                        break
+                    if tentativa == MAX_TENTATIVAS:
+                        raise RuntimeError(f"HeyGen falhou após {MAX_TENTATIVAS} tentativas na cena {i} [{tipo}]")
+                    print(f"      ⚠️ HeyGen retornou status falho — retentando...")
+                except RuntimeError as e:
+                    if tentativa == MAX_TENTATIVAS:
+                        raise
+                    print(f"      ⚠️ {e} — retentando...")
+
+            _baixar_video(info["video_url"], caminho_final_cena)
+            print(f"      ✅ avatar full-screen baixado: {os.path.getsize(caminho_final_cena) // 1024} KB")
+
+        else:
+            # ── Slide + narração OpenAI TTS (sem HeyGen, sem avatar) ───────────
+            if not slide_path:
+                print(f"   ⚠️ Cena {i}/{total} [CONTEUDO] sem slide — pulando")
+                continue
+
+            print(f"   🔊 Cena {i}/{total} [CONTEUDO] — gerando narração via OpenAI TTS...")
+            caminho_audio = os.path.join(pasta_temp, f"audio_{i:03d}.mp3")
+            gerar_audio_openai_tts(fala, caminho_audio, openai_token)
+            print(f"      ✅ áudio gerado: {os.path.getsize(caminho_audio) // 1024} KB")
+
+            _gerar_video_slide_com_audio(slide_path, caminho_audio, caminho_final_cena)
+            print(f"      ✅ slide+áudio composto: {caminho_final_cena}")
 
         caminhos_cena_final.append(caminho_final_cena)
 
@@ -374,11 +435,12 @@ def gerar_video_avatar_no_canto(
             print("   ⚠️ OPENAI_API_KEY ausente — pulando legenda.")
         else:
             caminho_legendado = os.path.join(pasta_temp, f"{nome_saida}_legendado.mp4")
-            lado, reservado = _zona_avatar_horizontal(posicao, AVATAR_LARGURA_REL, AVATAR_MARGEM_PX)
+            # Não há mais avatar PiP no canto nas cenas de conteúdo — legendas
+            # podem ocupar toda a largura do rodapé sem restrições de lado.
             try:
                 caminho_saida = adicionar_legendas(
                     caminho_saida, caminho_legendado, openai_token, prompt_contexto,
-                    evitar_lado=lado, reservar_px=reservado,
+                    evitar_lado=None, reservar_px=0,
                     largura_video=SAIDA_LARGURA, altura_video=SAIDA_ALTURA,
                 )
             except Exception as e:

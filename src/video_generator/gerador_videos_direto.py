@@ -195,22 +195,25 @@ DISCIPLINA: [nome completo da disciplina]
 ---
 
 [CENA 1 — ABERTURA]
+[TIPO] intro
 [PRODUCAO] Direção de expressão e postura do avatar (ex: "Sorrindo, olhar confiante para a câmera, tom acolhedor")
 [ANGULO] Sugestão de enquadramento (ex: "Plano médio, avatar centralizado")
 [TEXTO NA TELA] Texto curto para exibir na tela (máx. 6 palavras)
-[FALA] Texto exato que o avatar vai falar nesta cena
+[FALA] Texto exato que o avatar vai falar — saudação calorosa, apresenta o avatar pelo nome, diz o nome da disciplina e anuncia os tópicos que serão abordados nesta aula
 
 [CENA 2 — DESENVOLVIMENTO]
+[TIPO] conteudo
 [PRODUCAO] ...
 [ANGULO] ...
 [TEXTO NA TELA] ...
 [FALA] ...
 
 [CENA 3 — ENCERRAMENTO]
+[TIPO] outro
 [PRODUCAO] ...
 [ANGULO] ...
 [TEXTO NA TELA] ...
-[FALA] ...
+[FALA] Texto exato que o avatar vai falar — resume os principais pontos da aula e se despede com algo como "Te vejo na próxima aula!"
 
 ---
 DISCIPLINA: [próxima disciplina]
@@ -219,8 +222,11 @@ DISCIPLINA: [próxima disciplina]
 
 REGRAS:
 - Crie entre 3 e 5 cenas por disciplina
+- A PRIMEIRA cena SEMPRE recebe [TIPO] intro — o avatar aparece em tela cheia, se apresenta e anuncia o conteúdo
+- As cenas de DESENVOLVIMENTO recebem [TIPO] conteudo — narração sobre slides, sem avatar em tela
+- A ÚLTIMA cena SEMPRE recebe [TIPO] outro — o avatar volta em tela cheia para resumir e se despedir
 - [FALA] deve ser fluido, natural, sem marcações — é o texto exato para TTS
-- [PRODUCAO] guia o avatar (expressividade, gestos, emoção)
+- [PRODUCAO] guia o avatar (expressividade, gestos, emoção) — relevante apenas para cenas intro e outro
 - [ANGULO] é sugestão para edição posterior (não afeta o HeyGen diretamente)
 - [TEXTO NA TELA] são palavras-chave impactantes para sobrepor no vídeo
 - Tom geral: acolhedor, empolgante, profissional
@@ -347,6 +353,7 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
             cena_atual = {
                 "numero":        numero,
                 "nome":          nome_cena,
+                "tipo":          "",   # "intro" | "conteudo" | "outro"
                 "producao":      "",
                 "angulo":        "",
                 "texto_na_tela": "",
@@ -354,7 +361,9 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
             }
 
         elif cena_atual is not None:
-            if ls.startswith("[PRODUCAO]") or ls.startswith("[PRODUCÃO]"):
+            if ls.startswith("[TIPO]"):
+                cena_atual["tipo"] = ls.split("]", 1)[-1].strip().lower()
+            elif ls.startswith("[PRODUCAO]") or ls.startswith("[PRODUCÃO]"):
                 cena_atual["producao"] = ls.split("]", 1)[-1].strip()
             elif ls.startswith("[ANGULO]") or ls.startswith("[ÂNGULO]"):
                 cena_atual["angulo"] = ls.split("]", 1)[-1].strip()
@@ -366,6 +375,21 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
                 cena_atual["fala"] += " " + ls
 
     _salvar_disciplina()
+
+    # Fallback inteligente: se o modelo não gerou [TIPO], inferir pela posição na lista
+    for disc in disciplinas:
+        cenas = disc.get("cenas", [])
+        if not cenas:
+            continue
+        for i, cena in enumerate(cenas):
+            if not cena.get("tipo"):
+                if i == 0:
+                    cena["tipo"] = "intro"
+                elif i == len(cenas) - 1:
+                    cena["tipo"] = "outro"
+                else:
+                    cena["tipo"] = "conteudo"
+
     return disciplinas
 
 
