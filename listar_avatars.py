@@ -1,91 +1,58 @@
-"""
-Lista avatares e voices disponíveis na conta HeyGen.
-Execute: python listar_avatars.py
-"""
-
 import os
-import re
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-token = os.getenv("HEYGEN_API_KEY")
-if not token:
-    print("ERRO: HEYGEN_API_KEY nao encontrada no .env")
-    exit(1)
+api_key = os.getenv("HEYGEN_API_KEY")
 
-headers = {"X-Api-Key": token}
+if not api_key:
+    raise RuntimeError("HEYGEN_API_KEY não configurada no arquivo .env.")
 
-UUID_RE = re.compile(r'^[0-9a-f]{32}$', re.I)
+response = requests.get(
+    "https://api.heygen.com/v3/voices",
+    headers={
+        "X-Api-Key": api_key,
+    },
+    params={
+        "engine": "starfish",
+        "limit": 100,
+    },
+    timeout=30,
+)
 
-
-def _e_uuid(avatar_id: str) -> bool:
-    return bool(UUID_RE.match(avatar_id.replace("-", "")))
-
-
-# ── Avatares ──────────────────────────────────────────────────────────────────
-print("\n" + "=" * 70)
-print("AVATARES DISPONÍVEIS")
-print("=" * 70)
-
-resp = requests.get("https://api.heygen.com/v2/avatars", headers=headers, timeout=15)
-if not resp.ok:
-    print(f"Erro: HTTP {resp.status_code} — {resp.text[:200]}")
-else:
-    avatars = resp.json().get("data", {}).get("avatars", [])
-
-    publicos  = [a for a in avatars if not _e_uuid(a.get("avatar_id", ""))]
-    privados  = [a for a in avatars if     _e_uuid(a.get("avatar_id", ""))]
-
-    print(f"\n  ✅ PUBLICOS (nome-texto) — use estes, funcionam em qualquer conta ({len(publicos)})")
-    for a in publicos:
-        aid    = a.get("avatar_id", "?")
-        nome   = a.get("avatar_name", "?")
-        gender = a.get("gender", "?")
-        print(f"    {aid:<48}  {nome:<30}  {gender}")
-
-    if privados:
-        print(f"\n  ⚠️  UUID / customizados — podem nao funcionar fora do workspace original ({len(privados)})")
-        for a in privados[:10]:
-            aid    = a.get("avatar_id", "?")
-            nome   = a.get("avatar_name", "?")
-            print(f"    {aid:<48}  {nome}")
-        if len(privados) > 10:
-            print(f"    ... e mais {len(privados) - 10} omitidos")
-
-# ── Voices ────────────────────────────────────────────────────────────────────
-print("\n" + "=" * 70)
-print("VOICES DISPONÍVEIS  (português em primeiro)")
-print("=" * 70)
-
-resp = requests.get("https://api.heygen.com/v2/voices", headers=headers, timeout=15)
-if not resp.ok:
-    print(f"Erro: HTTP {resp.status_code} — {resp.text[:200]}")
-else:
-    voices = resp.json().get("data", {}).get("voices", [])
-
-    por_idioma: dict[str, list] = {}
-    for v in voices:
-        lang = v.get("language") or v.get("locale") or "?"
-        por_idioma.setdefault(lang, []).append(v)
-
-    prio = ["portuguese", "pt-br", "pt"]
-    idiomas = sorted(
-        por_idioma.keys(),
-        key=lambda x: (0 if any(p in x.lower() for p in prio) else 1, x)
+if not response.ok:
+    raise RuntimeError(
+        f"Erro ao listar vozes: HTTP {response.status_code} — "
+        f"{response.text}"
     )
 
-    for lang in idiomas:
-        print(f"\n  [{lang}]")
-        for v in por_idioma[lang]:
-            vid    = v.get("voice_id", "?")
-            nome   = v.get("display_name") or v.get("name", "?")
-            gender = v.get("gender", "?")
-            print(f"    {vid:<48}  {nome:<30}  {gender}")
+payload = response.json()
+vozes = payload.get("data", [])
 
-print("\n" + "=" * 70)
-print("Escolha um avatar PUBLICO e copie para o .env:")
-print("  HEYGEN_AVATAR_ID=<avatar_id do bloco PUBLICOS acima>")
-print("  HEYGEN_VOICE_ID=<voice_id>")
-print("=" * 70 + "\n")
+# Algumas respostas podem colocar os resultados dentro de "voices".
+if isinstance(vozes, dict):
+    vozes = vozes.get("voices", [])
+
+print(f"\nTotal de vozes Starfish encontradas: {len(vozes)}\n")
+
+for voz in vozes:
+    idioma = str(
+        voz.get("language")
+        or voz.get("locale")
+        or ""
+    ).lower()
+
+    if any(termo in idioma for termo in ("portugu", "pt-br", "brazil")):
+        print("=" * 70)
+        print(f"Nome: {voz.get('name', 'Não informado')}")
+        print(f"ID: {voz.get('voice_id', 'Não informado')}")
+        print(f"Gênero: {voz.get('gender', 'Não informado')}")
+        print(f"Idioma: {voz.get('language') or voz.get('locale')}")
+        print(f"Engine: {voz.get('engine', 'starfish')}")
+        print(
+            "Preview:",
+            voz.get("preview_audio_url")
+            or voz.get("preview_url")
+            or "Não disponível",
+        )

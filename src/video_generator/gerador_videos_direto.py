@@ -585,7 +585,7 @@ def verificar_status_video(video_id: str, heygen_token: str) -> dict:
     resp = requests.get(
         f"{HEYGEN_BASE_URL}/v3/videos/{video_id}",
         headers={"X-Api-Key": heygen_token},
-        timeout=15,
+        timeout=30,
     )
     if not resp.ok:
         raise RuntimeError(f"GET /v3/videos/{video_id}: HTTP {resp.status_code}")
@@ -601,10 +601,21 @@ def verificar_status_video(video_id: str, heygen_token: str) -> dict:
 
 
 def aguardar_video(video_id: str, heygen_token: str, max_min: int = 1.0) -> dict:
-    """Polling até completed/failed. Aguarda até max_min minutos."""
+    """
+    Polling até completed/failed. Aguarda até max_min minutos.
+
+    Falhas de rede transitórias (timeout, conexão caindo) ao consultar o
+    status NÃO interrompem a espera — HeyGen pode ficar minutos processando,
+    e um hiccup isolado de rede não deve derrubar o pipeline inteiro.
+    """
     tentativas = int((max_min * 60) // 10)
     for _ in range(tentativas):
-        info = verificar_status_video(video_id, heygen_token)
+        try:
+            info = verificar_status_video(video_id, heygen_token)
+        except requests.exceptions.RequestException as e:
+            print(f"      ⚠️ Falha de rede ao consultar status do vídeo ({e}) — tentando de novo em 10s...")
+            time.sleep(10)
+            continue
         if info["status"] == "completed":
             return info
         if info["status"] == "failed":

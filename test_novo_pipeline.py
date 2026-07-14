@@ -6,26 +6,45 @@ MODOS DE TESTE (use --modo):
   parser   — Gera roteiro via OpenAI e valida se [TIPO] foi parseado corretamente.
              Não gera áudio nem vídeo. Rápido e barato (só OpenAI Chat).
 
-  tts      — Além do parser, gera o áudio TTS de cada cena de conteúdo e combina
-             com o slide PNG via ffmpeg. Não usa HeyGen. Barato e rápido.
+  tts      — Além do parser, gera o áudio de cada cena de conteúdo com a voz do
+             HeyGen (POST /v3/voices/speech — só áudio, sem avatar/vídeo) e
+             combina com o slide PNG via ffmpeg, juntando tudo em 1 vídeo final.
+             Usa HeyGen só para TTS (cobra bem menos que gerar avatar em vídeo).
+
+  canto    — Cenas de conteúdo com slide + avatar HeyGen recortado (tronco pra
+             cima) sobreposto no canto, via chroma key. Chama o HeyGen 1x por
+             cena de conteúdo (mais caro que --modo tts, mas com avatar visível
+             o tempo todo, não só no intro/outro).
 
   completo — Pipeline inteiro: intro HeyGen + slides TTS + outro HeyGen.
-             Usa HeyGen (cobra créditos). Demora ~5–10 min por aula.
+             Usa HeyGen com avatar em vídeo (cobra mais créditos). Demora ~5–10 min por aula.
+
+Roteiros gerados são salvos em data/output/roteiros_teste/<disciplina>.txt e
+reaproveitados automaticamente nas próximas execuções da mesma disciplina —
+evita gastar chamada OpenAI de novo. Use --novo-roteiro pra forçar regeneração.
 
 Uso:
     python test_novo_pipeline.py --modo parser
     python test_novo_pipeline.py --modo tts
+    python test_novo_pipeline.py --modo tts --avatar masc
+    python test_novo_pipeline.py --modo canto
     python test_novo_pipeline.py --modo completo
     python test_novo_pipeline.py --modo completo --md caminho/para/disciplina.md
+    python test_novo_pipeline.py --modo tts --novo-roteiro
 """
 import argparse
 import os
+import re
 import sys
 import textwrap
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Onde os roteiros já gerados ficam salvos, pra não chamar a OpenAI de novo
+# a cada teste — se já existe um roteiro pra disciplina, ele é reaproveitado.
+PASTA_ROTEIROS = os.path.join("data", "output", "roteiros_teste")
 
 # ── markdown de exemplo embutido (usado quando não é passado --md) ────────────
 MARKDOWN_EXEMPLO = textwrap.dedent("""\
@@ -67,18 +86,41 @@ def _ler_markdown(caminho_md: str | None) -> tuple[str, str]:
     return md, disciplina
 
 
-def _gerar_e_parsear_roteiro(md: str, disciplina: str) -> tuple[str, list[dict]]:
+def _slug(nome: str) -> str:
+    slug = re.sub(r"[^\w.-]+", "_", nome.strip(), flags=re.UNICODE)
+    return slug.strip("_") or "disciplina"
+
+
+def _caminho_roteiro_cache(disciplina: str) -> str:
+    return os.path.join(PASTA_ROTEIROS, f"{_slug(disciplina)}.txt")
+
+
+def _gerar_e_parsear_roteiro(md: str, disciplina: str, forcar_novo: bool = False) -> tuple[str, list[dict]]:
     from src.video_generator.gerador_videos_direto import (
         gerar_roteiro,
         parsear_cenas_do_roteiro,
     )
 
-    openai_token = os.getenv("OPENAI_API_KEY")
+    caminho_cache = _caminho_roteiro_cache(disciplina)
+
     print(f"\n{'='*60}")
-    print(f"ETAPA 1 — Gerando roteiro via OpenAI para: {disciplina}")
-    print("="*60)
-    roteiro = gerar_roteiro(md, disciplina, openai_token)
-    print("\n--- ROTEIRO GERADO ---")
+    if os.path.isfile(caminho_cache) and not forcar_novo:
+        print(f"ETAPA 1 — Roteiro já existe para '{disciplina}' — reaproveitando (sem chamar a OpenAI)")
+        print(f"          {caminho_cache}")
+        print("="*60)
+        with open(caminho_cache, "r", encoding="utf-8") as f:
+            roteiro = f.read()
+    else:
+        openai_token = os.getenv("OPENAI_API_KEY")
+        print(f"ETAPA 1 — Gerando roteiro via OpenAI para: {disciplina}")
+        print("="*60)
+        roteiro = gerar_roteiro(md, disciplina, openai_token)
+        os.makedirs(PASTA_ROTEIROS, exist_ok=True)
+        with open(caminho_cache, "w", encoding="utf-8") as f:
+            f.write(roteiro)
+        print(f"          roteiro salvo em: {caminho_cache}")
+
+    print("\n--- ROTEIRO ---")
     print(roteiro[:2000], "..." if len(roteiro) > 2000 else "")
     print("---------------------")
 
@@ -114,72 +156,361 @@ def _gerar_e_parsear_roteiro(md: str, disciplina: str) -> tuple[str, list[dict]]
     return roteiro, cenas
 
 
-def modo_parser(caminho_md: str | None):
+def modo_parser(caminho_md: str | None, forcar_novo_roteiro: bool = False):
     _checar_env("OPENAI_API_KEY")
     md, disciplina = _ler_markdown(caminho_md)
-    _gerar_e_parsear_roteiro(md, disciplina)
+    _gerar_e_parsear_roteiro(md, disciplina, forcar_novo_roteiro)
     print("\n✅ MODO PARSER concluído — nenhum áudio/vídeo gerado.")
 
 
-def modo_tts(caminho_md: str | None):
+def modo_tts(
+    caminho_md: str | None,
+    avatar: str = "fem",
+    forcar_novo_roteiro: bool = False,
+):
+    import shutil
     import tempfile
 
     from src.video_generator.slides_generator import gerar_slides
-    from src.video_generator.compor_avatar_slides import _gerar_video_slide_com_audio
-    from src.video_generator.audio_generator import gerar_audio_openai_tts
+    from src.video_generator.compor_avatar_slides import (
+        _concatenar,
+        _gerar_video_slide_com_audio,
+    )
+    from src.video_generator.audio_generator import gerar_audio_heygen_tts
 
-    _checar_env("OPENAI_API_KEY")
+    # Valida a chave da HeyGen.
+    _checar_env("HEYGEN_API_KEY")
+    heygen_token = os.getenv("HEYGEN_API_KEY")
+
+    # Usa voz específica compatível com TTS Starfish.
+    if avatar == "fem":
+        _checar_env("TTS_VOZ_FEM_ID")
+        voice_id = os.getenv("TTS_VOZ_FEM_ID")
+    else:
+        _checar_env("TTS_VOZ_MASC_ID")
+        voice_id = os.getenv("TTS_VOZ_MASC_ID")
+
     md, disciplina = _ler_markdown(caminho_md)
-    _, cenas = _gerar_e_parsear_roteiro(md, disciplina)
 
-    cenas_conteudo = [c for c in cenas if c.get("tipo") == "conteudo"]
+    _, cenas = _gerar_e_parsear_roteiro(
+        md,
+        disciplina,
+        forcar_novo_roteiro,
+    )
+
+    # Somente cenas de conteúdo viram slides com áudio.
+    cenas_conteudo = [
+        cena
+        for cena in cenas
+        if cena.get("tipo") == "conteudo"
+    ]
+
     if not cenas_conteudo:
-        print("\n⚠️  Nenhuma cena de conteúdo encontrada para testar TTS+slides.")
+        print(
+            "\n⚠️ Nenhuma cena de conteúdo encontrada "
+            "para testar TTS + slides."
+        )
         return
 
     pasta_temp = tempfile.mkdtemp(prefix="teste_tts_")
     pasta_slides = os.path.join(pasta_temp, "slides")
-    print(f"\n{'='*60}")
-    print(f"ETAPA 3 — Gerando {len(cenas_conteudo)} slide(s) de conteúdo...")
-    print("="*60)
+
+    print(f"\n{'=' * 60}")
+    print(
+        f"ETAPA 3 — Gerando "
+        f"{len(cenas_conteudo)} slide(s) de conteúdo..."
+    )
+    print("=" * 60)
 
     cenas_para_slide = [
-        {"fala": c["fala"], "visual": c.get("producao", ""), "texto": c.get("texto_na_tela", "")}
-        for c in cenas_conteudo
+        {
+            "fala": cena.get("fala", ""),
+            "visual": cena.get("producao", ""),
+            "texto": cena.get("texto_na_tela", ""),
+        }
+        for cena in cenas_conteudo
+    ]
+
+    slides = gerar_slides(
+        cenas_para_slide,
+        pasta_slides,
+        disciplina,
+    )
+
+    print(
+        f"✅ {len(slides)} slide(s) gerado(s) em: "
+        f"{pasta_slides}"
+    )
+
+    if len(slides) != len(cenas_conteudo):
+        print(
+            f"[AVISO] Foram gerados {len(slides)} slides "
+            f"para {len(cenas_conteudo)} cenas."
+        )
+
+    print(f"\n{'=' * 60}")
+    print(
+        "ETAPA 4 — Gerando áudio "
+        "(voz HeyGen, sem avatar) + combinando com slides..."
+    )
+    print("=" * 60)
+
+    videos_gerados = []
+
+    for indice, (cena, slide) in enumerate(
+        zip(cenas_conteudo, slides),
+        start=1,
+    ):
+        fala = (cena.get("fala") or "").strip()
+
+        if not fala:
+            print(
+                f"  ⚠️ Cena {indice} sem fala — ignorando."
+            )
+            continue
+
+        caminho_audio = os.path.join(
+            pasta_temp,
+            f"audio_{indice:03d}.mp3",
+        )
+
+        caminho_video = os.path.join(
+            pasta_temp,
+            f"cena_{indice:03d}_conteudo.mp4",
+        )
+
+        print(
+            f"  Cena {indice}/{len(cenas_conteudo)} "
+            f"— TTS HeyGen ({len(fala)} chars)..."
+        )
+
+        gerar_audio_heygen_tts(
+            fala,
+            caminho_audio,
+            heygen_token,
+            voice_id,
+        )
+
+        if not os.path.isfile(caminho_audio):
+            raise RuntimeError(
+                f"O áudio da cena {indice} não foi criado: "
+                f"{caminho_audio}"
+            )
+
+        print(
+            f"    ✅ áudio: "
+            f"{os.path.getsize(caminho_audio) // 1024} KB"
+        )
+
+        _gerar_video_slide_com_audio(
+            slide,
+            caminho_audio,
+            caminho_video,
+        )
+
+        if not os.path.isfile(caminho_video):
+            raise RuntimeError(
+                f"O vídeo da cena {indice} não foi criado: "
+                f"{caminho_video}"
+            )
+
+        print(
+            f"    ✅ vídeo: "
+            f"{os.path.getsize(caminho_video) // 1024} KB "
+            f"→ {caminho_video}"
+        )
+
+        videos_gerados.append(caminho_video)
+
+    if not videos_gerados:
+        print(
+            "\n⚠️ Nenhum vídeo de conteúdo foi gerado."
+        )
+        return
+
+    nome_arquivo = re.sub(
+        r"[^\w.-]+",
+        "_",
+        disciplina.strip(),
+        flags=re.UNICODE,
+    ).strip("_")
+
+    destino = os.path.join(
+        "data",
+        "output",
+        "videos",
+        "teste_novo_pipeline",
+        f"{nome_arquivo}_tts.mp4",
+    )
+
+    os.makedirs(
+        os.path.dirname(destino),
+        exist_ok=True,
+    )
+
+    if len(videos_gerados) == 1:
+        shutil.copy2(
+            videos_gerados[0],
+            destino,
+        )
+    else:
+        print(f"\n{'=' * 60}")
+        print(
+            f"ETAPA 5 — Juntando "
+            f"{len(videos_gerados)} cena(s)..."
+        )
+        print("=" * 60)
+
+        caminho_final = os.path.join(
+            pasta_temp,
+            "video_final_tts.mp4",
+        )
+
+        _concatenar(
+            videos_gerados,
+            caminho_final,
+            pasta_temp,
+        )
+
+        shutil.copy2(
+            caminho_final,
+            destino,
+        )
+
+    print(
+        f"\n✅ MODO TTS concluído — "
+        f"{len(videos_gerados)} cena(s) gerada(s)."
+    )
+    print(f"   Vídeo final: {destino}")
+
+
+def modo_canto(caminho_md: str | None, avatar: str = "fem", forcar_novo_roteiro: bool = False):
+    """
+    Cenas de conteúdo com slide + avatar HeyGen recortado (tronco pra cima)
+    sobreposto no canto do slide, via chroma key — a composição visual usada
+    antes do pipeline atual (que só mostra avatar full-screen no intro/outro).
+
+    Chama o HeyGen 1x por cena de conteúdo (gera o avatar sobre fundo verde),
+    então compõe localmente com ffmpeg. Mais caro que --modo tts (que não usa
+    HeyGen pra vídeo nenhum), mas o avatar fica visível durante todo o vídeo.
+    """
+    import shutil
+    import tempfile
+
+    from src.video_generator.compor_avatar_slides import (
+        _baixar_video,
+        _concatenar,
+        _ffprobe_duracao,
+        _gerar_video_do_slide,
+        compor_avatar_sobre_slide,
+        gerar_avatar_chroma_key,
+    )
+    from src.video_generator.gerador_videos_direto import aguardar_video
+    from src.video_generator.slides_generator import gerar_slides
+
+    _checar_env("OPENAI_API_KEY", "HEYGEN_API_KEY")
+
+    # Resolve avatar/voz igual ao modo completo (avatar em vídeo, não TTS puro).
+    if avatar == "fem":
+        _checar_env("AVATAR_FEM_ID", "VOZ_FEM_ID")
+        avatar_id = os.getenv("AVATAR_FEM_ID")
+        voice_id  = os.getenv("VOZ_FEM_ID")
+        nome_avatar = "Marina"
+    else:
+        _checar_env("AVATAR_MASC_ID", "VOZ_MASC_ID")
+        avatar_id = os.getenv("AVATAR_MASC_ID")
+        voice_id  = os.getenv("VOZ_MASC_ID")
+        nome_avatar = "Mário"
+
+    heygen_token = os.getenv("HEYGEN_API_KEY")
+    print(f"Avatar: {nome_avatar} ({avatar_id})")
+
+    md, disciplina = _ler_markdown(caminho_md)
+    _, cenas = _gerar_e_parsear_roteiro(md, disciplina, forcar_novo_roteiro)
+
+    cenas_conteudo = [c for c in cenas if c.get("tipo") == "conteudo"]
+    if not cenas_conteudo:
+        print("\n⚠️ Nenhuma cena de conteúdo encontrada para testar avatar no canto.")
+        return
+
+    pasta_temp = tempfile.mkdtemp(prefix="teste_canto_")
+    pasta_slides = os.path.join(pasta_temp, "slides")
+
+    print(f"\n{'=' * 60}")
+    print(f"ETAPA 3 — Gerando {len(cenas_conteudo)} slide(s) de conteúdo...")
+    print("=" * 60)
+
+    cenas_para_slide = [
+        {
+            "fala": cena.get("fala", ""),
+            "visual": cena.get("producao", ""),
+            "texto": cena.get("texto_na_tela", ""),
+        }
+        for cena in cenas_conteudo
     ]
     slides = gerar_slides(cenas_para_slide, pasta_slides, disciplina)
     print(f"✅ {len(slides)} slide(s) gerado(s) em: {pasta_slides}")
 
-    openai_token = os.getenv("OPENAI_API_KEY")
-    print(f"\n{'='*60}")
-    print("ETAPA 4 — Gerando áudio TTS + combinando com slides...")
-    print("="*60)
+    print(f"\n{'=' * 60}")
+    print("ETAPA 4 — Gerando avatar HeyGen (fundo verde) por cena e compondo no canto do slide...")
+    print("=" * 60)
 
     videos_gerados = []
-    for i, (cena, slide) in enumerate(zip(cenas_conteudo, slides), 1):
+    for indice, (cena, slide) in enumerate(zip(cenas_conteudo, slides), start=1):
         fala = (cena.get("fala") or "").strip()
         if not fala:
+            print(f"  ⚠️ Cena {indice} sem fala — ignorando.")
             continue
-        caminho_audio = os.path.join(pasta_temp, f"audio_{i:03d}.mp3")
-        caminho_video = os.path.join(pasta_temp, f"cena_{i:03d}_conteudo.mp4")
 
-        print(f"  Cena {i}/{len(cenas_conteudo)} — TTS ({len(fala)} chars)...")
-        gerar_audio_openai_tts(fala, caminho_audio, openai_token)
-        print(f"    ✅ áudio: {os.path.getsize(caminho_audio) // 1024} KB")
+        print(f"  Cena {indice}/{len(cenas_conteudo)} — gerando avatar HeyGen (chroma key)...")
+        video_id = gerar_avatar_chroma_key(
+            fala, f"{disciplina} — Conteúdo {indice}/{len(cenas_conteudo)}",
+            heygen_token, avatar_id, voice_id,
+        )
+        info = aguardar_video(video_id, heygen_token, max_min=5.0)
+        if not info.get("video_url"):
+            print(f"    ⚠️ Cena {indice} sem video_url — pulando")
+            continue
 
-        _gerar_video_slide_com_audio(slide, caminho_audio, caminho_video)
-        print(f"    ✅ vídeo: {os.path.getsize(caminho_video) // 1024} KB → {caminho_video}")
+        caminho_avatar = os.path.join(pasta_temp, f"avatar_{indice:03d}.mp4")
+        _baixar_video(info["video_url"], caminho_avatar)
+        print(f"    ✅ avatar baixado: {os.path.getsize(caminho_avatar) // 1024} KB")
+
+        duracao = _ffprobe_duracao(caminho_avatar)
+        caminho_slide_video = os.path.join(pasta_temp, f"slide_{indice:03d}.mp4")
+        _gerar_video_do_slide(slide, duracao, caminho_slide_video)
+
+        caminho_video = os.path.join(pasta_temp, f"cena_{indice:03d}_canto.mp4")
+        compor_avatar_sobre_slide(caminho_avatar, caminho_slide_video, caminho_video)
+        print(f"    ✅ cena composta: {caminho_video}")
         videos_gerados.append(caminho_video)
 
-    print(f"\n✅ MODO TTS concluído — {len(videos_gerados)} vídeo(s) de conteúdo gerado(s).")
-    print(f"   Pasta de saída: {pasta_temp}")
+    if not videos_gerados:
+        print("\n⚠️ Nenhum vídeo gerado — nada para juntar.")
+        return
+
+    nome_arquivo = re.sub(r"[^\w.-]+", "_", disciplina.strip(), flags=re.UNICODE).strip("_")
+    destino = os.path.join("data", "output", "videos", "teste_novo_pipeline", f"{nome_arquivo}_canto.mp4")
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
+
+    if len(videos_gerados) == 1:
+        shutil.copy2(videos_gerados[0], destino)
+    else:
+        print(f"\n{'=' * 60}")
+        print(f"ETAPA 5 — Juntando {len(videos_gerados)} cena(s) em um único vídeo...")
+        print("=" * 60)
+        caminho_final = os.path.join(pasta_temp, "video_final_canto.mp4")
+        _concatenar(videos_gerados, caminho_final, pasta_temp)
+        shutil.copy2(caminho_final, destino)
+
+    print(f"\n✅ MODO CANTO concluído — {len(videos_gerados)} cena(s) juntada(s) em 1 vídeo.")
+    print(f"   Vídeo final: {destino}")
 
 
-def modo_completo(caminho_md: str | None, avatar: str = "fem"):
+def modo_completo(caminho_md: str | None, avatar: str = "fem", forcar_novo_roteiro: bool = False):
     import tempfile
     import shutil
 
-    from src.video_generator.gerador_videos_direto import parsear_cenas_do_roteiro, gerar_roteiro
     from src.video_generator.video_generator import gerar_video_com_slides
 
     _checar_env("OPENAI_API_KEY", "HEYGEN_API_KEY")
@@ -207,20 +538,10 @@ def modo_completo(caminho_md: str | None, avatar: str = "fem"):
 
     os.environ["SLIDES_MD_CONTEXT"] = md[:8000]
 
-    print(f"\n{'='*60}")
-    print(f"ETAPA 1 — Gerando roteiro para: {disciplina}")
-    print("="*60)
-    roteiro = gerar_roteiro(md, disciplina, openai_token)
-    disciplinas_parseadas = parsear_cenas_do_roteiro(roteiro)
-    if not disciplinas_parseadas:
+    _, cenas = _gerar_e_parsear_roteiro(md, disciplina, forcar_novo_roteiro)
+    if not cenas:
         print("ERRO: parser retornou vazio.")
         sys.exit(1)
-
-    disc = disciplinas_parseadas[0]
-    cenas = disc.get("cenas", [])
-    print(f"✅ {len(cenas)} cena(s) parseada(s):")
-    for c in cenas:
-        print(f"   [{c.get('tipo', '?'):>8}] Cena {c['numero']} — {(c.get('fala') or '')[:60]}...")
 
     pasta_temp = tempfile.mkdtemp(prefix="teste_completo_")
     pasta_slides = os.path.join(pasta_temp, "slides")
@@ -251,9 +572,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Testa o novo pipeline de vídeo (intro+tts+outro).")
     parser.add_argument(
         "--modo",
-        choices=["parser", "tts", "completo"],
+        choices=["parser", "tts", "canto", "completo"],
         default="parser",
-        help="parser = só roteiro/tipos | tts = slides+TTS sem HeyGen | completo = pipeline inteiro",
+        help=(
+            "parser = só roteiro/tipos | tts = slides+TTS voz HeyGen sem avatar | "
+            "canto = slides+avatar HeyGen no canto (chroma key) | completo = pipeline inteiro"
+        ),
     )
     parser.add_argument(
         "--md",
@@ -264,13 +588,20 @@ if __name__ == "__main__":
         "--avatar",
         choices=["fem", "masc"],
         default="fem",
-        help="Avatar a usar no modo completo: fem (Marina, padrão) ou masc (Mário).",
+        help="Voz/avatar a usar nos modos tts e completo: fem (Marina, padrão) ou masc (Mário).",
+    )
+    parser.add_argument(
+        "--novo-roteiro",
+        action="store_true",
+        help="Ignora o roteiro em cache (data/output/roteiros_teste/) e gera um novo via OpenAI.",
     )
     args = parser.parse_args()
 
     if args.modo == "parser":
-        modo_parser(args.md)
+        modo_parser(args.md, args.novo_roteiro)
     elif args.modo == "tts":
-        modo_tts(args.md)
+        modo_tts(args.md, args.avatar, args.novo_roteiro)
+    elif args.modo == "canto":
+        modo_canto(args.md, args.avatar, args.novo_roteiro)
     elif args.modo == "completo":
-        modo_completo(args.md, args.avatar)
+        modo_completo(args.md, args.avatar, args.novo_roteiro)

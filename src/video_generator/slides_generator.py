@@ -214,6 +214,7 @@ def _rodape(draw, disciplina, numero, total, x0, x_max, altura):
 
 
 def _titulo_linha(draw, titulo, x0, x_max, y_start, fonte_titulo):
+    titulo = _encurtar(titulo, 10)
     """Título em caps + separador. Retorna y logo após a linha."""
     lmax   = x_max - x0
     linhas = _quebrar_linhas(draw, titulo.upper(), fonte_titulo, lmax)[:2]
@@ -228,27 +229,40 @@ def _titulo_linha(draw, titulo, x0, x_max, y_start, fonte_titulo):
 
 
 def _linha_com_destaque(draw, x, y, linha, destaque, fonte_normal, fonte_bold):
-    """Renderiza linha com a palavra-destaque em negrito + accent."""
     if not destaque:
         draw.text((x, y), linha, font=fonte_normal, fill=TEXT_COLOR)
         return
-    dest_low = destaque.lower().strip(".,;:!?")
-    palavras  = linha.split()
+    dest_palavras = [p.strip(".,;:!?") for p in destaque.lower().split()]
+    palavras = linha.split()
     xc = x
-    for i, palavra in enumerate(palavras):
-        sufixo = "" if i == len(palavras) - 1 else " "
-        token  = palavra + sufixo
-        if palavra.lower().strip(".,;:!?") == dest_low:
-            draw.text((xc, y - 1), token, font=fonte_bold, fill=ACCENT_COLOR)
-            bbox = draw.textbbox((0, 0), token, font=fonte_bold)
-        else:
-            draw.text((xc, y), token, font=fonte_normal, fill=TEXT_COLOR)
-            bbox = draw.textbbox((0, 0), token, font=fonte_normal)
+    i = 0
+    while i < len(palavras):
+        janela = [p.lower().strip(".,;:!?") for p in palavras[i:i+len(dest_palavras)]]
+        casou = janela == dest_palavras
+        n = len(dest_palavras) if casou else 1
+        token = " ".join(palavras[i:i+n]) + ("" if i+n == len(palavras) else " ")
+        fonte = fonte_bold if casou else fonte_normal
+        cor = ACCENT_COLOR if casou else TEXT_COLOR
+        draw.text((xc, y - (1 if casou else 0)), token, font=fonte, fill=cor)
+        bbox = draw.textbbox((0, 0), token, font=fonte)
         xc += bbox[2] - bbox[0]
+        i += n
 
 
 def _bullets(draw, topicos, destaque, x0, x_max, y_ini, altura_disp,
              fonte_topico, fonte_bold_topico, fonte_marcador):
+    tamanho = fonte_topico.size
+    while tamanho > 18:
+        fonte_topico = _carregar_fonte(tamanho)
+        fonte_bold_topico = _carregar_fonte(tamanho, negrito=True)
+        marc_w = draw.textbbox((0,0), MARCADOR+" ", font=fonte_marcador)[2]
+        lbullet = (x_max - x0) - marc_w
+        alt_linha = _alt(draw, fonte_topico) + 8
+        blocos = [_quebrar_linhas(draw, t, fonte_topico, lbullet)[:2] for t in topicos]
+        altura_txt = sum(len(b) * alt_linha for b in blocos)
+        if altura_txt <= altura_disp:
+            break
+        tamanho -= 2
     marc_w     = draw.textbbox((0, 0), MARCADOR + " ", font=fonte_marcador)[2]
     lbullet    = (x_max - x0) - marc_w
     alt_linha  = _alt(draw, fonte_topico) + 8

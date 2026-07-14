@@ -46,7 +46,7 @@ from src.video_generator.legendas import adicionar_legendas
 
 # ─── CONFIGURAÇÃO DE POSICIONAMENTO DO AVATAR ─────────────────────────────────
 AVATAR_POSICAO      = "direita-baixo"  # direita | direita-baixo | direita-cima | esquerda | esquerda-baixo | esquerda-cima | centro
-AVATAR_LARGURA_REL  = 0.38        # largura do avatar em relação à largura final (PiP no canto; slide ocupa o resto)
+AVATAR_LARGURA_REL  = 0.30        # largura do avatar em relação à largura final (PiP no canto; slide ocupa o resto)
 AVATAR_MARGEM_PX    = 20          # distância entre o avatar e a borda do frame
 CHROMA_COR_HEYGEN   = "#00FF00"   # cor de fundo pedida ao HeyGen (chroma key)
 CHROMA_SIMILARIDADE = 0.12        # tolerância do colorkey (0.0–1.0)
@@ -391,7 +391,7 @@ def gerar_video_avatar_no_canto(
                     if tentativa == MAX_TENTATIVAS:
                         raise RuntimeError(f"HeyGen falhou após {MAX_TENTATIVAS} tentativas na cena {i} [{tipo}]")
                     print(f"      ⚠️ HeyGen retornou status falho — retentando...")
-                except RuntimeError as e:
+                except (RuntimeError, requests.exceptions.RequestException) as e:
                     if tentativa == MAX_TENTATIVAS:
                         raise
                     print(f"      ⚠️ {e} — retentando...")
