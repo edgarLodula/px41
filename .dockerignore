@@ -1,0 +1,16 @@
+.git
+.env
+.front_git_backup
+venv
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+data/output
+front/node_modules
+front/dist
+front/.env
+front/.env.local
+*.mp4

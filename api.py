@@ -367,17 +367,34 @@ def run_heygen_videos(cenas_aprovadas: list):
 
         for disciplina, fala in falas.items():
             print(f"Gerando video: {disciplina}")
-            video_id = gerar_video_heygen(fala, disciplina, heygen_token)
-            info     = aguardar_video(video_id, heygen_token)
+            video_id = None
+            info = None
+            ultimo_erro = None
+            for tentativa in range(1, 3):
+                try:
+                    sufixo = f" (tentativa {tentativa}/2)" if tentativa > 1 else ""
+                    print(f"  HeyGen: gerando cena '{disciplina}'{sufixo}")
+                    video_id = gerar_video_heygen(fala, disciplina, heygen_token)
+                    print(f"  HeyGen job criado: video_id={video_id}")
+                    info = aguardar_video(video_id, heygen_token, max_min=20)
+                    break
+                except Exception as e:
+                    ultimo_erro = e
+                    vid_str = video_id or "desconhecido"
+                    if tentativa < 2:
+                        print(f"  ⚠️ Tentativa {tentativa} falhou (video_id={vid_str}): {e} — retentando...")
+                        video_id = None
+                    else:
+                        print(f"  ❌ Disciplina '{disciplina}' falhou após 2 tentativas (video_id={vid_str}): {e}")
+                        raise
 
-            if info.get("video_url"):
-                import requests as req
-                slug   = re.sub(r"[^\w]", "_", disciplina)[:60]
-                caminho = os.path.join(PASTA_VIDEO, f"{slug}.mp4")
-                video_bytes = req.get(info["video_url"], timeout=60).content
-                with open(caminho, "wb") as f:
-                    f.write(video_bytes)
-                video_paths[disciplina] = caminho
+            import requests as req
+            slug   = re.sub(r"[^\w]", "_", disciplina)[:60]
+            caminho = os.path.join(PASTA_VIDEO, f"{slug}.mp4")
+            video_bytes = req.get(info["video_url"], timeout=60).content
+            with open(caminho, "wb") as f:
+                f.write(video_bytes)
+            video_paths[disciplina] = caminho
 
         pipeline_state["video_paths"] = video_paths
         pipeline_state["video_path"]  = list(video_paths.values())[0] if video_paths else None
@@ -393,9 +410,10 @@ def run_heygen_videos(cenas_aprovadas: list):
 # =========================
 app = FastAPI(title="ATRIA San Marino API")
 
+_frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:8080")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[_frontend_origin],
     allow_methods=["*"],
     allow_headers=["*"],
 )

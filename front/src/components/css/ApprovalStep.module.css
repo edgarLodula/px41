@@ -1,0 +1,79 @@
+.wrap {
+  @apply max-w-lg mx-auto;
+}
+
+.card {
+  @apply rounded-2xl p-6 sm:p-8 bg-card space-y-6 border-l-4 border-primary;
+}
+
+.headerRow {
+  @apply flex items-center gap-3;
+}
+
+.iconBox {
+  @apply w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0;
+}
+
+.title {
+  @apply text-lg font-bold text-foreground;
+}
+
+.desc {
+  @apply text-sm text-muted-foreground;
+}
+
+.infoBox {
+  @apply bg-secondary rounded-xl p-5 space-y-1;
+}
+
+.infoLabel {
+  @apply text-xs text-muted-foreground uppercase tracking-wide font-medium;
+}
+
+.infoValue {
+  @apply text-base font-semibold text-foreground;
+}
+
+.fullWidth {
+  @apply w-full;
+}
+
+.hint {
+  @apply text-xs text-muted-foreground text-center;
+}
+
+.checkboxRow {
+  @apply flex items-start gap-3;
+}
+
+.checkboxOffset {
+  @apply mt-0.5;
+}
+
+.label {
+  @apply text-sm select-none;
+}
+
+.labelActive {
+  @apply text-foreground cursor-pointer;
+}
+
+.labelInactive {
+  @apply text-muted-foreground;
+}
+
+.textareaSection {
+  @apply pt-2 space-y-3 border-t border-border;
+}
+
+.textarea {
+  @apply w-full rounded-lg border border-border bg-background p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50 disabled:cursor-not-allowed text-foreground placeholder:text-muted-foreground;
+}
+
+.redoButton {
+  @apply w-full border-foreground/20;
+}
+
+.redoError {
+  @apply text-xs text-destructive text-center;
+}

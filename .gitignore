@@ -8,8 +8,22 @@ venv/
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
 
-# Sistema (Windows)
+# Sistema (Windows/Mac)
 .DS_Store
-Thumbs.db.env
+Thumbs.db
+
+# Saídas geradas
 data/output/
+
+# Frontend
+front/node_modules/
+front/dist/
+front/.env
+front/.env.local
+
+# Backup do git interno do front/ (criado durante o achatamento)
+.front_git_backup/

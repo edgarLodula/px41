@@ -1,0 +1,87 @@
+.centerWrap {
+  @apply max-w-md mx-auto space-y-6 text-center;
+}
+
+.errorTitle {
+  @apply font-semibold text-destructive text-lg;
+}
+
+.errorDesc {
+  @apply text-sm text-muted-foreground;
+}
+
+.outlineFullBtn {
+  @apply w-full;
+}
+
+.statusTitle {
+  @apply font-semibold text-foreground;
+}
+
+.progressBar {
+  @apply h-3;
+}
+
+.percentText {
+  @apply text-sm text-muted-foreground;
+}
+
+.readyWrap {
+  @apply max-w-3xl mx-auto space-y-6;
+}
+
+.readyHeader {
+  @apply text-center space-y-1;
+}
+
+.readyTitle {
+  @apply text-lg font-bold text-foreground;
+}
+
+.readySub {
+  @apply text-sm text-muted-foreground;
+}
+
+.loadingList {
+  @apply flex items-center justify-center py-10 text-muted-foreground;
+}
+
+.noVideos {
+  @apply text-center text-sm text-muted-foreground py-8;
+}
+
+.videoGrid {
+  @apply grid gap-5 sm:grid-cols-2 lg:grid-cols-3;
+}
+
+.videoCard {
+  @apply space-y-3;
+}
+
+.videoTitle {
+  @apply text-sm font-bold text-foreground leading-snug;
+}
+
+.videoBox {
+  @apply rounded-xl border border-border bg-card overflow-hidden;
+}
+
+.thumbnail {
+  @apply relative aspect-video bg-foreground/95 flex items-center justify-center cursor-pointer;
+}
+
+.playCircle {
+  @apply w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform;
+}
+
+.videoFooter {
+  @apply p-3;
+}
+
+.fullWidth {
+  @apply w-full;
+}
+
+.bottomWrap {
+  @apply max-w-sm mx-auto pt-2;
+}

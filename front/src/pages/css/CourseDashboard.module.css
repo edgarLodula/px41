@@ -1,0 +1,145 @@
+.page {
+  @apply min-h-screen flex flex-col bg-background;
+}
+
+.header {
+  @apply border-b bg-card sticky top-0 z-10;
+}
+
+.headerInner {
+  @apply max-w-5xl mx-auto flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3;
+}
+
+.logoBox {
+  @apply w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-foreground flex items-center justify-center shrink-0 shadow-sm;
+}
+
+.logoText {
+  @apply text-primary font-extrabold text-lg sm:text-xl tracking-tight leading-none;
+}
+
+.titleBlock {
+  @apply flex-1 min-w-0;
+}
+
+.title {
+  @apply text-sm sm:text-base font-bold text-foreground leading-tight truncate;
+}
+
+.subtitle {
+  @apply text-[11px] sm:text-xs text-muted-foreground truncate;
+}
+
+.main {
+  @apply flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10;
+}
+
+.topRow {
+  @apply flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8;
+}
+
+.pageTitle {
+  @apply text-3xl font-bold text-foreground;
+}
+
+.pageDesc {
+  @apply text-sm text-muted-foreground mt-1;
+}
+
+.genButton {
+  @apply shrink-0;
+}
+
+.loadingWrap {
+  @apply flex flex-col items-center justify-center py-20 text-muted-foreground;
+}
+
+.loadingText {
+  @apply text-sm;
+}
+
+.errorBox {
+  @apply bg-card border border-destructive/30 rounded-2xl p-8 flex flex-col items-center text-center max-w-md mx-auto;
+  box-shadow: var(--shadow-card);
+}
+
+.errorTitle {
+  @apply text-foreground font-medium mb-2;
+}
+
+.errorDesc {
+  @apply text-sm text-muted-foreground mb-5;
+}
+
+.emptyWrap {
+  @apply flex flex-col items-center text-center py-16;
+}
+
+.emptyTitle {
+  @apply text-lg font-semibold text-foreground;
+}
+
+.emptyDesc {
+  @apply text-sm text-muted-foreground mt-1 mb-5 max-w-md;
+}
+
+.coursesGrid {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5;
+}
+
+.courseCard {
+  @apply bg-card rounded-2xl border border-border p-5 flex flex-col;
+  box-shadow: var(--shadow-card);
+}
+
+.courseHeader {
+  @apply flex items-start gap-3 mb-3;
+}
+
+.courseIconBox {
+  @apply w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0;
+}
+
+.courseTitleBlock {
+  @apply flex-1 min-w-0;
+}
+
+.courseName {
+  @apply font-bold text-foreground leading-tight;
+}
+
+.courseCount {
+  @apply text-xs text-muted-foreground mt-0.5;
+}
+
+.apostilaList {
+  @apply flex-1 mb-4 overflow-y-auto max-h-[180px] space-y-2 pr-1;
+}
+
+.apostilaEmpty {
+  @apply text-sm text-muted-foreground italic;
+}
+
+.apostilaRow {
+  @apply flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-2;
+}
+
+.apostilaInfo {
+  @apply flex-1 min-w-0;
+}
+
+.apostilaName {
+  @apply text-xs font-medium text-foreground truncate;
+}
+
+.apostilaDate {
+  @apply text-[11px] text-muted-foreground;
+}
+
+.downloadBtn {
+  @apply h-7 w-7 p-0 shrink-0;
+}
+
+.footerBtn {
+  @apply w-full;
+}

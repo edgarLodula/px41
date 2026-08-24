@@ -1,0 +1,51 @@
+.wrap {
+  @apply flex items-center justify-center gap-0 w-full max-w-2xl mx-auto py-6;
+}
+
+.stepItem {
+  @apply flex items-center flex-1 last:flex-initial;
+}
+
+.stepCol {
+  @apply flex flex-col items-center gap-1.5;
+}
+
+.circle {
+  @apply w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all;
+}
+
+.circleDone {
+  @apply bg-primary text-primary-foreground;
+}
+
+.circleActive {
+  @apply bg-primary text-primary-foreground shadow-lg shadow-primary/30;
+}
+
+.circleInactive {
+  @apply bg-muted text-muted-foreground;
+}
+
+.label {
+  @apply text-xs font-medium whitespace-nowrap;
+}
+
+.labelActive {
+  @apply text-foreground;
+}
+
+.labelInactive {
+  @apply text-muted-foreground;
+}
+
+.connector {
+  @apply h-0.5 flex-1 mx-2 mt-[-1.25rem] rounded-full;
+}
+
+.connectorDone {
+  @apply bg-primary;
+}
+
+.connectorPending {
+  @apply bg-border;
+}

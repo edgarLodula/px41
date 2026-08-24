@@ -1,0 +1,63 @@
+.wrap {
+  @apply max-w-xl mx-auto space-y-6;
+}
+
+.dropzone {
+  @apply border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer;
+}
+
+.dropzoneActive {
+  @apply border-primary bg-primary/5;
+}
+
+.dropzoneInactive {
+  @apply border-border hover:border-primary/50;
+}
+
+.dropzoneTitle {
+  @apply font-semibold text-foreground;
+}
+
+.dropzoneHint {
+  @apply text-sm text-muted-foreground mt-1;
+}
+
+.fileList {
+  @apply space-y-2;
+}
+
+.fileRow {
+  @apply flex items-center gap-3 bg-muted/50 rounded-lg px-4 py-3;
+}
+
+.fileInfo {
+  @apply flex-1 min-w-0;
+}
+
+.fileName {
+  @apply text-sm font-medium truncate;
+}
+
+.fileSize {
+  @apply text-xs text-muted-foreground;
+}
+
+.removeBtn {
+  @apply text-muted-foreground hover:text-destructive;
+}
+
+.instructionsWrap {
+  @apply mt-4 space-y-2;
+}
+
+.instructionsLabel {
+  @apply text-sm font-medium text-foreground;
+}
+
+.textarea {
+  @apply w-full resize-y;
+}
+
+.submitButton {
+  @apply w-full;
+}

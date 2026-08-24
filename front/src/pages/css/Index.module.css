@@ -1,0 +1,52 @@
+.page {
+  @apply min-h-screen flex flex-col bg-background;
+}
+
+.header {
+  @apply border-b bg-card sticky top-0 z-10;
+}
+
+.headerInner {
+  @apply max-w-5xl mx-auto flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3;
+}
+
+.backButton {
+  @apply shrink-0;
+}
+
+.logoBox {
+  @apply w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-foreground flex items-center justify-center shrink-0 shadow-sm;
+}
+
+.logoText {
+  @apply text-primary font-extrabold text-lg sm:text-xl tracking-tight leading-none;
+}
+
+.titleBlock {
+  @apply flex-1 min-w-0;
+}
+
+.title {
+  @apply text-sm sm:text-base font-bold text-foreground leading-tight truncate;
+}
+
+.subtitle {
+  @apply text-[11px] sm:text-xs text-muted-foreground truncate;
+}
+
+.main {
+  @apply flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10;
+}
+
+.card {
+  @apply bg-card rounded-2xl border border-border p-5 sm:p-8;
+  box-shadow: var(--shadow-card);
+}
+
+.stepperWrap {
+  @apply border-b border-border -mx-5 sm:-mx-8 px-5 sm:px-8 mb-6 sm:mb-8;
+}
+
+.uploadError {
+  @apply text-center text-sm text-destructive mt-4;
+}

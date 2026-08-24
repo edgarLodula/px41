@@ -1,0 +1,39 @@
+.wrap {
+  @apply max-w-md mx-auto;
+}
+
+.caption {
+  @apply text-center text-sm text-muted-foreground mb-6;
+}
+
+.list {
+  @apply space-y-1;
+}
+
+.stageRow {
+  @apply flex items-center gap-3 px-4 py-3 rounded-lg transition-colors;
+}
+
+.stageRowRunning {
+  @apply bg-primary/5;
+}
+
+.stageLabel {
+  @apply text-sm;
+}
+
+.stageWaiting {
+  @apply text-muted-foreground;
+}
+
+.stageRunning {
+  @apply font-medium text-foreground;
+}
+
+.stageDone {
+  @apply text-foreground;
+}
+
+.stageError {
+  @apply text-destructive;
+}

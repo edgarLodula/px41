@@ -388,7 +388,8 @@ def gerar_video_avatar_no_canto(
                         fala, f"{disciplina} — {tipo.capitalize()} {i}/{total}",
                         heygen_token, avatar_id, voice_id,
                     )
-                    info = aguardar_video(video_id, heygen_token, max_min=5.0)
+                    print(f"      video_id={video_id}  (anote — permite checar status em caso de timeout)")
+                    info = aguardar_video(video_id, heygen_token, max_min=20.0)
                     if info.get("video_url"):
                         break
                     if tentativa == MAX_TENTATIVAS:

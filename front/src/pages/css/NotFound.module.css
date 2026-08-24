@@ -1,0 +1,19 @@
+.page {
+  @apply flex min-h-screen items-center justify-center bg-muted;
+}
+
+.content {
+  @apply text-center;
+}
+
+.title {
+  @apply mb-4 text-4xl font-bold;
+}
+
+.subtitle {
+  @apply mb-4 text-xl text-muted-foreground;
+}
+
+.link {
+  @apply text-primary underline hover:text-primary/90;
+}

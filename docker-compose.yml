@@ -1,0 +1,36 @@
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data/output:/app/data/output
+    networks:
+      - smr-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+      args:
+        # Cenário C: proxy reverso externo roteia /api → backend:8000
+        # Ajuste para o domínio real em produção.
+        # Em desenvolvimento local: http://localhost:8000
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - smr-net
+    restart: unless-stopped
+
+networks:
+  smr-net:
+    driver: bridge
