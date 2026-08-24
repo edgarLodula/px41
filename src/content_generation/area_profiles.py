@@ -626,7 +626,6 @@ _ALIASES: dict[str, str] = {
     "supply chain": "curso_logistica",
 }
 
-
 def get_profile(area: str) -> dict:
     """
     Retorna uma cópia profunda do profile da área solicitada.
