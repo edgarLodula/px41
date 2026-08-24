@@ -30,16 +30,19 @@ def _fallback_item(cena):
     while len(topicos) < 3:
         topicos.append(topicos[-1])
 
-    return {"titulo": titulo[:60], "topicos": topicos[:5], "destaque": None}
+    return {"titulo": titulo[:60], "topicos": topicos[:5], "destaque": None, "imagem_prompt": None}
 
 
 def _validar_e_corrigir(items, cenas):
+    
     """Garante que items tem o mesmo tamanho de cenas e estrutura mínima válida."""
     while len(items) < len(cenas):
         items.append(_fallback_item(cenas[len(items)]))
     items = items[:len(cenas)]
 
     for i, item in enumerate(items):
+        if "imagem_prompt" not in item:
+            item["imagem_prompt"] = None
         if not isinstance(item.get("titulo"), str) or not item["titulo"].strip():
             item["titulo"] = _fallback_item(cenas[i])["titulo"]
         topicos = item.get("topicos")
@@ -84,8 +87,13 @@ _PROMPT_SISTEMA = (
     "- destaque: 1 palavra-chave importante da cena, ou null;\n"
     "- Retorne APENAS JSON válido: array com N objetos na mesma ordem das cenas, "
     "sem markdown fences, sem texto antes ou depois.\n"
+    "- imagem_prompt: descrição curta em INGLÊS de uma ilustração didática para o slide, "
+    "ou null se o slide não precisa de imagem (ex: abertura, encerramento, slide com texto suficiente). "
+    "Exemplos: 'anatomical illustration of human heart with labeled chambers', "
+    "'diagram showing blood pressure measurement technique'. "
+    "Use estilo educacional, fundo transparente ou branco, sem texto na imagem;\n"
     "Formato de cada objeto: "
-    "{\"titulo\": \"...\", \"topicos\": [\"...\", \"...\", \"...\"], \"destaque\": \"...\" ou null}"
+    "{\"titulo\": \"...\", \"topicos\": [\"...\", \"...\", \"...\"], \"destaque\": \"...\" ou null, \"imagem_prompt\": \"...\" ou null}"
 )
 
 

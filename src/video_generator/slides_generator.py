@@ -6,9 +6,9 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 FONTE_PATH       = "assets/fonts/Roboto-Regular.ttf"     # fonte bundled
 FONTE_BOLD_PATH  = "assets/fonts/Fredericka-the-Great.ttf" # título estilo giz
-BG_COLOR         = (26, 42, 26)       # verde lousa escuro
+BG_COLOR         = (68, 68, 68)       # azul escuro (mesmo tom do fundo do avatar HeyGen full-screen, #1a2744)
 TEXT_COLOR       = (232, 232, 208)    # branco giz (levemente amarelado)
-ACCENT_COLOR     = (255, 235, 59)     # amarelo giz
+ACCENT_COLOR     = (248, 182, 21)     # amarelo giz
 SUBTITLE_COLOR   = (180, 180, 155)    # giz apagado
 MARCADOR         = "•"    # "▸" não existe na maioria das fontes de fallback (ex.: Calibri) e aparecia como tofu (☐)
 
@@ -17,6 +17,25 @@ MARCADOR         = "•"    # "▸" não existe na maioria das fontes de fallbac
 # faixa para o texto do slide nunca ficar escondido atrás do avatar.
 MARGEM_INFERIOR_AVATAR = 320
 AVATAR_LADO            = "direita"  # "esquerda" | "direita" — deve casar com o lado usado em AVATAR_POSICAO
+
+# Imagem ilustrativa (quando o slide tem uma): é o destaque do slide —
+# encostada na lateral esquerda (logo após a barra decorativa), grande,
+# ocupando quase toda a altura entre o título e o rodapé — sem nunca cortar
+# nada (contida na caixa) nem tocar em nenhum outro elemento (barra
+# lateral, título, rodapé, avatar). Sem tópicos/texto disputando espaço — a
+# narração vira legenda sincronizada (Whisper) queimada no vídeo depois,
+# ver legendas.py.
+# O avatar ocupa 404px a partir da borda direita na composição final
+# (SAIDA_LARGURA=1280 * AVATAR_LARGURA_REL=0.30 + AVATAR_MARGEM_PX=20, ver
+# compor_avatar_slides.py) — a partir de x=876. IMAGEM_LARGURA_MAX mantém a
+# imagem bem longe disso (x0=70 + 760 = 830), mesmo já sobrando folga.
+IMAGEM_LARGURA_MAX      = 760
+# A legenda sincronizada (Whisper, ver legendas.py) é queimada no vídeo
+# DEPOIS, por cima do slide — ela usa até 2 linhas, ancoradas a
+# LEGENDA_MARGEM_V=100px da borda inferior, o que pode subir até ~y=570.
+# A imagem tem que acabar bem antes disso pra nunca ficar por baixo do
+# texto da legenda.
+IMAGEM_MARGEM_INFERIOR  = 150   # respiro acima da faixa da legenda (e do rodapé)
 
 TIPO_LISTA        = "lista"
 TIPO_ABERTURA     = "abertura"
@@ -138,10 +157,23 @@ def _extrair_conteudo(cena, conteudo, disciplina):
 # ── Detecção de tipo de cena ───────────────────────────────────────────────────
 
 def _detectar_tipo(cena, conteudo, indice, total):
-    if indice == 0:
+    # Papel da cena no roteiro (intro/conteudo/outro), quando o chamador o
+    # informa — ver video_generator.gerar_video_com_slides. Tem prioridade
+    # sobre a posição: sem isso, filtrar as cenas antes de chamar
+    # gerar_slides (ex.: test_novo_pipeline.py só passando as cenas de
+    # "conteudo") fazia a 1ª/última virarem abertura/encerramento por engano
+    # — os dois únicos layouts sem coluna de imagem.
+    papel = (cena.get("tipo") or "").lower().strip()
+    if papel == "intro":
         return TIPO_ABERTURA
-    if indice == total - 1:
+    if papel == "outro":
         return TIPO_ENCERRAMENTO
+    if not papel:
+        # Sem papel explícito: mantém o heurístico antigo por posição.
+        if indice == 0:
+            return TIPO_ABERTURA
+        if indice == total - 1:
+            return TIPO_ENCERRAMENTO
 
     # Tipo declarado pelo gerador de conteúdo (campo opcional)
     if conteudo and isinstance(conteudo.get("tipo"), str):
@@ -167,7 +199,10 @@ def _barra_lateral(draw, altura):
     draw.rectangle([(38, 0), (46, altura)], fill=ACCENT_COLOR)
 
 
-def _desenhar_tag(draw, destaque, x_max, y_top):
+def _desenhar_tag_avatar(draw, destaque, x_max, altura):
+    """Tag do destaque encostada bem em cima da faixa do avatar (canto
+    inferior direito) — o avatar é composto por cima do slide depois (ver
+    compor_avatar_slides.py), então a tag aparece logo acima da cabeça dele."""
     if not destaque:
         return
     fonte_tag = _carregar_fonte(20, negrito=True)
@@ -177,8 +212,9 @@ def _desenhar_tag(draw, destaque, x_max, y_top):
     tag_w = (bbox[2] - bbox[0]) + 2 * pad_x
     tag_h = (bbox[3] - bbox[1]) + 2 * pad_y
     tag_x = x_max - tag_w
-    draw.rectangle([(tag_x, y_top), (tag_x + tag_w, y_top + tag_h)], fill=ACCENT_COLOR)
-    draw.text((tag_x + pad_x, y_top + pad_y - 4), tag_text, font=fonte_tag, fill=BG_COLOR)
+    tag_y = altura - MARGEM_INFERIOR_AVATAR - tag_h - 12
+    draw.rectangle([(tag_x, tag_y), (tag_x + tag_w, tag_y + tag_h)], fill=ACCENT_COLOR)
+    draw.text((tag_x + pad_x, tag_y + pad_y - 4), tag_text, font=fonte_tag, fill=BG_COLOR)
 
 
 def _icone_disc(draw, disciplina, cx, cy, raio=22):
@@ -211,6 +247,27 @@ def _rodape(draw, disciplina, numero, total, x0, x_max, altura):
     else:
         bbox = draw.textbbox((0, 0), texto, font=fonte)
         draw.text((x_max - (bbox[2] - bbox[0]), y), texto, font=fonte, fill=SUBTITLE_COLOR)
+
+
+def _colar_imagem(img, imagem, x0, y0, x1, y1, alinhar_esquerda=False):
+    """Encaixa `imagem` (PIL) inteira dentro do retângulo (x0,y0)-(x1,y1),
+    mantendo a proporção — nunca corta nada da imagem (pode sobrar fundo
+    azul nas bordas se a proporção não bater exato). Por padrão centraliza
+    dentro da caixa; com `alinhar_esquerda=True` encosta o lado esquerdo da
+    imagem em x0 (útil pra ela ficar "grudada" na lateral, sem gap)."""
+    box_w, box_h = x1 - x0, y1 - y0
+    if imagem is None or box_w <= 10 or box_h <= 10:
+        return
+    im = imagem.copy()
+    im.thumbnail((box_w, box_h), Image.LANCZOS)
+    px = x0 if alinhar_esquerda else x0 + (box_w - im.width) // 2
+    py = y0 + (box_h - im.height) // 2
+    if im.mode == "RGBA":
+        img.paste(im, (px, py), im)
+    else:
+        img.paste(im, (px, py))
+
+
 
 
 def _titulo_linha(draw, titulo, x0, x_max, y_start, fonte_titulo):
@@ -288,19 +345,23 @@ def _bullets(draw, topicos, destaque, x0, x_max, y_ini, altura_disp,
 
 # ── Layouts por tipo ───────────────────────────────────────────────────────────
 
-def _layout_lista(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims):
+def _layout_lista(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims, imagem=None):
     largura, altura, x0, x_max = dims
     _barra_lateral(draw, altura)
-    _desenhar_tag(draw, destaque, x_max, 28)
     y = _titulo_linha(draw, titulo, x0, x_max, 56, _carregar_fonte(44, negrito=True))
-    _bullets(
-        draw, topicos, destaque, x0, x_max, y, altura - MARGEM_INFERIOR_AVATAR - y,
-        _carregar_fonte(30), _carregar_fonte(30, negrito=True), _carregar_fonte(32, negrito=True),
-    )
+    y_max = altura - MARGEM_INFERIOR_AVATAR
+    if imagem is not None:
+        _colar_imagem(img, imagem, x0, y, min(x_max, x0 + IMAGEM_LARGURA_MAX), altura - IMAGEM_MARGEM_INFERIOR, alinhar_esquerda=True)
+    else:
+        _bullets(
+            draw, topicos, destaque, x0, x_max, y, y_max - y,
+            _carregar_fonte(30), _carregar_fonte(30, negrito=True), _carregar_fonte(32, negrito=True),
+        )
+        _desenhar_tag_avatar(draw, destaque, x_max, altura)
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
 
 
-def _layout_abertura(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims):
+def _layout_abertura(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims, imagem=None):
     largura, altura, x0, x_max = dims
     _barra_lateral(draw, altura)
 
@@ -342,7 +403,7 @@ def _layout_abertura(img, draw, titulo, topicos, destaque, disciplina, numero, t
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
 
 
-def _layout_encerramento(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims):
+def _layout_encerramento(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims, imagem=None):
     largura, altura, x0, x_max = dims
     _barra_lateral(draw, altura)
 
@@ -364,10 +425,9 @@ def _layout_encerramento(img, draw, titulo, topicos, destaque, disciplina, numer
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
 
 
-def _layout_definicao(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims):
+def _layout_definicao(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims, imagem=None):
     largura, altura, x0, x_max = dims
     _barra_lateral(draw, altura)
-    _desenhar_tag(draw, destaque, x_max, 28)
 
     fonte_termo = _carregar_fonte(62, negrito=True)
     fonte_def   = _carregar_fonte(26)
@@ -381,55 +441,72 @@ def _layout_definicao(img, draw, titulo, topicos, destaque, disciplina, numero, 
     draw.line([(x0, y), (x_max - 20, y)], fill=ACCENT_COLOR, width=3)
     y += 26
 
-    for t in topicos[:3]:
-        for linha in _quebrar_linhas(draw, t, fonte_def, lmax)[:2]:
-            draw.text((x0, y), linha, font=fonte_def, fill=TEXT_COLOR)
-            y += 34
-        y += 8
+    y_max = altura - MARGEM_INFERIOR_AVATAR
+    if imagem is not None:
+        _colar_imagem(img, imagem, x0, y, min(x_max, x0 + IMAGEM_LARGURA_MAX), altura - IMAGEM_MARGEM_INFERIOR, alinhar_esquerda=True)
+    else:
+        y_topicos = y
+        for t in topicos[:3]:
+            for linha in _quebrar_linhas(draw, t, fonte_def, x_max - x0)[:2]:
+                draw.text((x0, y_topicos), linha, font=fonte_def, fill=TEXT_COLOR)
+                y_topicos += 34
+            y_topicos += 8
+        _desenhar_tag_avatar(draw, destaque, x_max, altura)
 
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
 
 
-def _layout_processo(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims):
+def _layout_processo(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims, imagem=None):
     largura, altura, x0, x_max = dims
     _barra_lateral(draw, altura)
 
     fonte_titulo = _carregar_fonte(38, negrito=True)
     fonte_etapa  = _carregar_fonte(26)
     fonte_num    = _carregar_fonte(32, negrito=True)
-    lmax         = x_max - x0
     num_w        = draw.textbbox((0, 0), "9. ", font=fonte_num)[2]
     alt_e        = _alt(draw, fonte_etapa) + 6
 
     y = _titulo_linha(draw, titulo, x0, x_max, 56, fonte_titulo)
+    y_max = altura - MARGEM_INFERIOR_AVATAR
 
-    for i, etapa in enumerate(topicos[:5]):
-        etapa_limpa  = re.sub(r'^\s*\d+[.)]\s*', '', etapa).strip()
-        linhas_etapa = _quebrar_linhas(draw, etapa_limpa, fonte_etapa, lmax - num_w)[:2]
-        draw.text((x0, y - 2), f"{i + 1}.", font=fonte_num, fill=ACCENT_COLOR)
-        for j, linha in enumerate(linhas_etapa):
-            draw.text((x0 + num_w, y + j * alt_e), linha, font=fonte_etapa, fill=TEXT_COLOR)
-        y += len(linhas_etapa) * alt_e + 10
+    if imagem is not None:
+        _colar_imagem(img, imagem, x0, y, min(x_max, x0 + IMAGEM_LARGURA_MAX), altura - IMAGEM_MARGEM_INFERIOR, alinhar_esquerda=True)
+    else:
+        lmax = x_max - x0
+        etapas = topicos[:5]
+        for i, etapa in enumerate(etapas):
+            etapa_limpa  = re.sub(r'^\s*\d+[.)]\s*', '', etapa).strip()
+            linhas_etapa = _quebrar_linhas(draw, etapa_limpa, fonte_etapa, lmax - num_w)[:2]
+            draw.text((x0, y - 2), f"{i + 1}.", font=fonte_num, fill=ACCENT_COLOR)
+            for j, linha in enumerate(linhas_etapa):
+                draw.text((x0 + num_w, y + j * alt_e), linha, font=fonte_etapa, fill=TEXT_COLOR)
+            y += len(linhas_etapa) * alt_e + 10
 
-        # Seta entre etapas
-        if i < min(len(topicos), 5) - 1:
-            draw.text((x0 + 6, y - 6), "↓", font=fonte_num, fill=ACCENT_COLOR)
-            y += 26
+            # Seta entre etapas
+            if i < len(etapas) - 1:
+                draw.text((x0 + 6, y - 6), "↓", font=fonte_num, fill=ACCENT_COLOR)
+                y += 26
 
     _rodape(draw, disciplina, numero, total, x0, x_max, altura)
 
 
-def _layout_numero(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims):
+def _layout_numero(img, draw, titulo, topicos, destaque, disciplina, numero, total, dims, imagem=None):
     largura, altura, x0, x_max = dims
     _barra_lateral(draw, altura)
 
     fonte_titulo = _carregar_fonte(36, negrito=True)
     fonte_big    = _carregar_fonte(80, negrito=True)
     fonte_ctx    = _carregar_fonte(26)
-    lmax         = x_max - x0
 
     y = _titulo_linha(draw, titulo, x0, x_max, 56, fonte_titulo)
+    y_max = altura - MARGEM_INFERIOR_AVATAR
 
+    if imagem is not None:
+        _colar_imagem(img, imagem, x0, y, min(x_max, x0 + IMAGEM_LARGURA_MAX), altura - IMAGEM_MARGEM_INFERIOR, alinhar_esquerda=True)
+        _rodape(draw, disciplina, numero, total, x0, x_max, altura)
+        return
+
+    lmax = x_max - x0
     stat_text = topicos[0] if topicos else ""
     m = re.search(r'[\d.,]+\s*%?', stat_text)
     if m:
@@ -461,7 +538,7 @@ def _layout_numero(img, draw, titulo, topicos, destaque, disciplina, numero, tot
     else:
         # Sem número detectado: fallback para lista
         _bullets(
-            draw, topicos, destaque, x0, x_max, y, altura - MARGEM_INFERIOR_AVATAR - y,
+            draw, topicos, destaque, x0, x_max, y, y_max - y,
             _carregar_fonte(30), _carregar_fonte(30, negrito=True), _carregar_fonte(32, negrito=True),
         )
 
@@ -480,10 +557,13 @@ _LAYOUTS = {
 }
 
 
-def _gerar_slide_cena(cena, caminho_saida, disciplina, conteudo=None, numero=1, total=1):
+def _gerar_slide_cena(cena, caminho_saida, disciplina, conteudo=None, numero=1, total=1, imagem_path=None):
     """Gera 1 slide PNG. Conteúdo ocupa quase a tela toda — o avatar é um PiP
-    sobreposto no canto inferior esquerdo (ver compor_avatar_slides.py), por
-    isso o texto usa MARGEM_INFERIOR_AVATAR para não ficar atrás dele."""
+    sobreposto no canto inferior direito (ver compor_avatar_slides.py), por
+    isso o texto usa MARGEM_INFERIOR_AVATAR para não ficar atrás dele.
+    Quando há `imagem_path`, ela vira o destaque do slide, encostada na
+    lateral esquerda (ver _colar_imagem) — título e rodapé continuam
+    ocupando a largura toda."""
     largura, altura = 1280, 720
     area_w = int(largura * 0.97)
     x0, x_max = 70, area_w - 30
@@ -498,12 +578,18 @@ def _gerar_slide_cena(cena, caminho_saida, disciplina, conteudo=None, numero=1, 
     img = Image.blend(img, noise_rgb, alpha=0.10)
     draw = ImageDraw.Draw(img)
 
+    imagem = None
+    if imagem_path:
+        try:
+            imagem = Image.open(imagem_path).convert("RGBA")
+        except Exception as e:
+            print(f"   [AVISO] Falha ao abrir imagem do slide ({imagem_path}): {e}")
 
     titulo, topicos, destaque = _extrair_conteudo(cena, conteudo, disciplina)
     tipo = _detectar_tipo(cena, conteudo, numero - 1, total)
     _LAYOUTS.get(tipo, _layout_lista)(
         img, draw, titulo, topicos, destaque, disciplina, numero, total,
-        (largura, altura, x0, x_max),
+        (largura, altura, x0, x_max), imagem,
     )
     img.save(caminho_saida)
 
@@ -555,11 +641,21 @@ def gerar_slides(cenas, pasta_saida, disciplina):
             print("   [AVISO] SLIDES_MD_CONTEXT vazio — usando fallback determinístico.")
 
     total    = len(cenas)
+    imagens  = [None] * total
+    if conteudos and openai_token:
+        try:
+            from src.video_generator.imagem_slides_generator import gerar_imagens_slides
+            imagens = gerar_imagens_slides(conteudos, pasta_saida, openai_token)
+        except Exception as e:
+            print(f"   [AVISO] Falha ao gerar imagens dos slides: {e}. Slides ficam sem imagem.")
+            imagens = [None] * total
+
     caminhos = []
     for i, cena in enumerate(cenas):
-        caminho  = os.path.join(pasta_saida, f"slide_{i:03d}.png")
-        conteudo = conteudos[i] if (conteudos and i < len(conteudos)) else None
-        _gerar_slide_cena(cena, caminho, disciplina, conteudo, numero=i + 1, total=total)
+        caminho     = os.path.join(pasta_saida, f"slide_{i:03d}.png")
+        conteudo    = conteudos[i] if (conteudos and i < len(conteudos)) else None
+        imagem_path = imagens[i] if i < len(imagens) else None
+        _gerar_slide_cena(cena, caminho, disciplina, conteudo, numero=i + 1, total=total, imagem_path=imagem_path)
         caminhos.append(os.path.abspath(caminho))
 
     print(f"   {len(caminhos)} slide(s) gerado(s) em: {pasta_saida}")

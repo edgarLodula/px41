@@ -154,7 +154,10 @@ def gerar_avatar_chroma_key(
         "script":         fala,
         "title":          titulo,
         "aspect_ratio":   HEYGEN_ASPECT_RATIO,
-        "voice_settings": {"speed": HEYGEN_SPEED},
+        "voice_settings": {
+            "speed":  HEYGEN_SPEED,
+            "locale": os.getenv("HEYGEN_VOICE_LOCALE", "pt-BR"),
+        },
         "motion_prompt":  HEYGEN_MOTION_PROMPT,
         "expressiveness": HEYGEN_EXPRESSIVENESS,
         "engine":         {"type": HEYGEN_ENGINE},

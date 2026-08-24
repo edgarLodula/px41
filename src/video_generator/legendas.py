@@ -43,6 +43,16 @@ LEGENDA_MARGEM_LR   = 65             # margem lateral (px) — livre da barra am
 # ───────────────────────────────────────────────────────────────────────────────
 
 
+def _print_seguro(texto: str) -> None:
+    """print() que nunca lança — em console Windows sem UTF-8 (cp1252),
+    imprimir emoji derruba UnicodeEncodeError; aqui cai pra uma versão
+    sem os caracteres problemáticos em vez de propagar o erro."""
+    try:
+        print(texto)
+    except UnicodeEncodeError:
+        print(texto.encode("ascii", errors="replace").decode("ascii"))
+
+
 def _extrair_audio(caminho_video: str, caminho_audio: str):
     r = subprocess.run(
         [
@@ -213,14 +223,14 @@ def adicionar_legendas(caminho_video: str, caminho_saida: str, openai_token: str
     nome_base = os.path.splitext(os.path.basename(caminho_video))[0]
     caminho_srt = os.path.join(pasta, f"{nome_base}.srt")
 
-    print("   🎙️  Transcrevendo áudio (Whisper) para gerar legenda...")
+    _print_seguro("   🎙️  Transcrevendo áudio (Whisper) para gerar legenda...")
     transcrever_srt(caminho_video, caminho_srt, openai_token, prompt_contexto)
-    print(f"      ✅ Legenda gerada: {caminho_srt}")
+    _print_seguro(f"      ✅ Legenda gerada: {caminho_srt}")
 
-    print("   🔥 Queimando legenda no vídeo...")
+    _print_seguro("   🔥 Queimando legenda no vídeo...")
     queimar_legenda(caminho_video, caminho_srt, caminho_saida, evitar_lado, reservar_px,
                      largura_video, altura_video)
-    print(f"      ✅ Vídeo com legenda: {caminho_saida}")
+    _print_seguro(f"      ✅ Vídeo com legenda: {caminho_saida}")
 
     if not manter_srt:
         try:

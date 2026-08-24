@@ -221,7 +221,7 @@ DISCIPLINA: [próxima disciplina]
 ... (repete o formato)
 
 REGRAS:
-- Crie entre 3 e 5 cenas por disciplina
+- 5 a 25 cenas, cada uma com fala de 120-180 palavras
 - A PRIMEIRA cena SEMPRE recebe [TIPO] intro — o avatar aparece em tela cheia, se apresenta e anuncia o conteúdo
 - As cenas de DESENVOLVIMENTO recebem [TIPO] conteudo — narração sobre slides, sem avatar em tela
 - A ÚLTIMA cena SEMPRE recebe [TIPO] outro — o avatar volta em tela cheia para resumir e se despedir

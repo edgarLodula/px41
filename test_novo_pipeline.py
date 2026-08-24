@@ -192,6 +192,10 @@ def modo_tts(
 
     md, disciplina = _ler_markdown(caminho_md)
 
+    # Necessário pra gerar_slides() chamar a OpenAI e produzir conteúdo rico
+    # (título/tópicos/imagem_prompt) em vez do fallback determinístico.
+    os.environ["SLIDES_MD_CONTEXT"] = md[:8000]
+
     _, cenas = _gerar_e_parsear_roteiro(
         md,
         disciplina,
@@ -227,6 +231,10 @@ def modo_tts(
             "fala": cena.get("fala", ""),
             "visual": cena.get("producao", ""),
             "texto": cena.get("texto_na_tela", ""),
+            # Evita que a 1ª/última cena deste lote (só cenas de conteúdo,
+            # sem intro/outro) sejam confundidas com abertura/encerramento
+            # por posição — ver slides_generator._detectar_tipo.
+            "tipo": "conteudo",
         }
         for cena in cenas_conteudo
     ]
@@ -398,14 +406,21 @@ def modo_canto(caminho_md: str | None, avatar: str = "fem", forcar_novo_roteiro:
     import tempfile
 
     from src.video_generator.compor_avatar_slides import (
+        AVATAR_LARGURA_REL,
+        AVATAR_MARGEM_PX,
+        AVATAR_POSICAO,
+        SAIDA_ALTURA,
+        SAIDA_LARGURA,
         _baixar_video,
         _concatenar,
         _ffprobe_duracao,
         _gerar_video_do_slide,
+        _zona_avatar_horizontal,
         compor_avatar_sobre_slide,
         gerar_avatar_chroma_key,
     )
     from src.video_generator.gerador_videos_direto import aguardar_video
+    from src.video_generator.legendas import adicionar_legendas
     from src.video_generator.slides_generator import gerar_slides
 
     _checar_env("OPENAI_API_KEY", "HEYGEN_API_KEY")
@@ -426,6 +441,11 @@ def modo_canto(caminho_md: str | None, avatar: str = "fem", forcar_novo_roteiro:
     print(f"Avatar: {nome_avatar} ({avatar_id})")
 
     md, disciplina = _ler_markdown(caminho_md)
+
+    # Necessário pra gerar_slides() chamar a OpenAI e produzir conteúdo rico
+    # (título/tópicos/imagem_prompt) em vez do fallback determinístico.
+    os.environ["SLIDES_MD_CONTEXT"] = md[:8000]
+
     _, cenas = _gerar_e_parsear_roteiro(md, disciplina, forcar_novo_roteiro)
 
     cenas_conteudo = [c for c in cenas if c.get("tipo") == "conteudo"]
@@ -445,6 +465,10 @@ def modo_canto(caminho_md: str | None, avatar: str = "fem", forcar_novo_roteiro:
             "fala": cena.get("fala", ""),
             "visual": cena.get("producao", ""),
             "texto": cena.get("texto_na_tela", ""),
+            # Evita que a 1ª/última cena deste lote (só cenas de conteúdo,
+            # sem intro/outro) sejam confundidas com abertura/encerramento
+            # por posição — ver slides_generator._detectar_tipo.
+            "tipo": "conteudo",
         }
         for cena in cenas_conteudo
     ]
@@ -456,34 +480,83 @@ def modo_canto(caminho_md: str | None, avatar: str = "fem", forcar_novo_roteiro:
     print("=" * 60)
 
     videos_gerados = []
+    falhas_cena = []
     for indice, (cena, slide) in enumerate(zip(cenas_conteudo, slides), start=1):
         fala = (cena.get("fala") or "").strip()
         if not fala:
             print(f"  ⚠️ Cena {indice} sem fala — ignorando.")
             continue
 
-        print(f"  Cena {indice}/{len(cenas_conteudo)} — gerando avatar HeyGen (chroma key)...")
-        video_id = gerar_avatar_chroma_key(
-            fala, f"{disciplina} — Conteúdo {indice}/{len(cenas_conteudo)}",
-            heygen_token, avatar_id, voice_id,
-        )
-        info = aguardar_video(video_id, heygen_token, max_min=5.0)
-        if not info.get("video_url"):
-            print(f"    ⚠️ Cena {indice} sem video_url — pulando")
+        # Cada cena é isolada num try/except: se UMA cena falhar (timeout,
+        # erro de rede, HeyGen fora do ar), as cenas anteriores já geradas
+        # nesta mesma aula NÃO são perdidas — seguimos pras próximas cenas
+        # e no final juntamos o que deu certo, em vez de descartar tudo.
+        # Além disso, cada cena tem direito a uma 2ª tentativa completa
+        # (novo video_id do zero) antes de ser dada como falha definitiva —
+        # timeouts no HeyGen costumam ser uma lentidão pontual da fila de
+        # renderização, não um problema estrutural da cena em si.
+        MAX_TENTATIVAS_CENA = 2
+        video_id = None
+        sucesso = False
+        ultimo_erro = None
+        for tentativa in range(1, MAX_TENTATIVAS_CENA + 1):
+            try:
+                n_palavras = len(fala.split())
+                sufixo_tentativa = f" (tentativa {tentativa}/{MAX_TENTATIVAS_CENA})" if tentativa > 1 else ""
+                print(f"  Cena {indice}/{len(cenas_conteudo)} — gerando avatar HeyGen "
+                      f"(chroma key, {n_palavras} palavras de fala){sufixo_tentativa}...")
+                video_id = gerar_avatar_chroma_key(
+                    fala, f"{disciplina} — Conteúdo {indice}/{len(cenas_conteudo)}",
+                    heygen_token, avatar_id, voice_id,
+                )
+                # Log imediato do video_id — se o polling abaixo estourar o
+                # tempo limite, o render pode ter continuado no HeyGen mesmo
+                # assim; com o ID em mãos dá pra checar depois via
+                # /gerador-videos/heygen-status/{video_id} em vez de perder o
+                # rastro do que foi gerado (e possivelmente cobrado).
+                print(f"    video_id: {video_id}  (anote — permite checar status depois em caso de timeout)")
+
+                # Timeout generoso: cenas de conteúdo mais longas (várias
+                # dezenas de segundos de fala) podem legitimamente demorar mais
+                # que os 5 min originais para renderizar no HeyGen.
+                info = aguardar_video(video_id, heygen_token, max_min=20.0)
+                if not info.get("video_url"):
+                    raise RuntimeError("sem video_url na resposta")
+
+                caminho_avatar = os.path.join(pasta_temp, f"avatar_{indice:03d}.mp4")
+                _baixar_video(info["video_url"], caminho_avatar)
+                print(f"    ✅ avatar baixado: {os.path.getsize(caminho_avatar) // 1024} KB")
+
+                duracao = _ffprobe_duracao(caminho_avatar)
+                caminho_slide_video = os.path.join(pasta_temp, f"slide_{indice:03d}.mp4")
+                _gerar_video_do_slide(slide, duracao, caminho_slide_video)
+
+                caminho_video = os.path.join(pasta_temp, f"cena_{indice:03d}_canto.mp4")
+                compor_avatar_sobre_slide(caminho_avatar, caminho_slide_video, caminho_video)
+                print(f"    ✅ cena composta: {caminho_video}")
+                videos_gerados.append(caminho_video)
+                sucesso = True
+                break
+            except Exception as e:
+                ultimo_erro = e
+                video_id_str = video_id or "desconhecido (falhou antes de gerar o ID)"
+                if tentativa < MAX_TENTATIVAS_CENA:
+                    print(f"    ⚠️ Cena {indice} falhou na tentativa {tentativa} ({e}) — "
+                          f"video_id: {video_id_str}. Tentando de novo do zero...")
+                    video_id = None
+                else:
+                    print(f"    ❌ Cena {indice} falhou após {MAX_TENTATIVAS_CENA} tentativas "
+                          f"({e}) — video_id: {video_id_str}. Seguindo pras próximas cenas desta aula.")
+
+        if not sucesso:
+            video_id_str = video_id or "desconhecido (falhou antes de gerar o ID)"
+            falhas_cena.append((indice, video_id_str, str(ultimo_erro)))
             continue
 
-        caminho_avatar = os.path.join(pasta_temp, f"avatar_{indice:03d}.mp4")
-        _baixar_video(info["video_url"], caminho_avatar)
-        print(f"    ✅ avatar baixado: {os.path.getsize(caminho_avatar) // 1024} KB")
-
-        duracao = _ffprobe_duracao(caminho_avatar)
-        caminho_slide_video = os.path.join(pasta_temp, f"slide_{indice:03d}.mp4")
-        _gerar_video_do_slide(slide, duracao, caminho_slide_video)
-
-        caminho_video = os.path.join(pasta_temp, f"cena_{indice:03d}_canto.mp4")
-        compor_avatar_sobre_slide(caminho_avatar, caminho_slide_video, caminho_video)
-        print(f"    ✅ cena composta: {caminho_video}")
-        videos_gerados.append(caminho_video)
+    if falhas_cena:
+        print(f"\n⚠️ {len(falhas_cena)} cena(s) falharam nesta aula (video_id anotado acima pra cada uma):")
+        for idx, vid, erro in falhas_cena:
+            print(f"   - Cena {idx}: video_id={vid} | {erro}")
 
     if not videos_gerados:
         print("\n⚠️ Nenhum vídeo gerado — nada para juntar.")
@@ -502,6 +575,26 @@ def modo_canto(caminho_md: str | None, avatar: str = "fem", forcar_novo_roteiro:
         caminho_final = os.path.join(pasta_temp, "video_final_canto.mp4")
         _concatenar(videos_gerados, caminho_final, pasta_temp)
         shutil.copy2(caminho_final, destino)
+
+    print(f"\n{'=' * 60}")
+    print("ETAPA 6 — Transcrevendo a fala (Whisper) e queimando legenda sincronizada...")
+    print("=" * 60)
+
+    openai_token = os.getenv("OPENAI_API_KEY")
+    # Mesma zona reservada pro avatar na composição (compor_avatar_slides.py)
+    # — a legenda evita esse lado pra nunca ficar por cima do avatar.
+    lado_avatar, reservar_px = _zona_avatar_horizontal(AVATAR_POSICAO, AVATAR_LARGURA_REL, AVATAR_MARGEM_PX)
+    try:
+        caminho_legendado = os.path.join(pasta_temp, f"{nome_arquivo}_canto_legendado.mp4")
+        adicionar_legendas(
+            destino, caminho_legendado, openai_token, prompt_contexto=disciplina,
+            evitar_lado=lado_avatar, reservar_px=reservar_px,
+            largura_video=SAIDA_LARGURA, altura_video=SAIDA_ALTURA,
+        )
+        shutil.copy2(caminho_legendado, destino)
+        print(f"   ✅ Legenda adicionada: {destino}")
+    except Exception as e:
+        print(f"   ⚠️ Falha ao gerar legenda ({e}) — mantendo vídeo sem legenda.")
 
     print(f"\n✅ MODO CANTO concluído — {len(videos_gerados)} cena(s) juntada(s) em 1 vídeo.")
     print(f"   Vídeo final: {destino}")
