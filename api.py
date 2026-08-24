@@ -1,11 +1,43 @@
+"""
+api.py — Backend San Marino Booklet Creator
+Porta: 8000
+
+Endpoints:
+  POST /upload                               → recebe PDFs, dispara pipeline em background
+  GET  /status                               → status do pipeline (polling do ProcessingStep)
+  GET  /download/apostila                    → baixa a apostila gerada (PDF)
+  GET  /download/apostilas-zip               → baixa todas as apostilas em um ZIP
+  POST /approve                              → aprova conteúdo e dispara geração real de vídeo
+  POST /reject                               → rejeita e reseta o pipeline
+  POST /approve/scripts                      → aprova roteiros (ScriptApprovalStep)
+  GET  /videos                               → lista vídeos gerados (por disciplina)
+  GET  /download/video/{nome}                → baixa vídeo por nome de disciplina ou arquivo
+  GET  /cursos                               → lista cursos + apostilas (CourseDashboard)
+
+  (fluxo GeradorVideos com aprovação por etapa)
+  POST /gerador-videos/iniciar               → inicia job: PDF → Markdown via OpenAI
+  GET  /gerador-videos/status/{job_id}       → polling do job
+  POST /gerador-videos/aprovar-markdown/{job_id}
+  POST /gerador-videos/aprovar-roteiro/{job_id}
+  POST /gerador-videos/aprovar-cenas/{job_id}
+  GET  /gerador-videos/heygen-status/{video_id}  → consulta status direto no HeyGen v3
+
+Rodar:
+  uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+"""
+
+import io
 import os
 import re
 import json
+import zipfile
 import threading
 import tempfile
-from fastapi import FastAPI, UploadFile, File
+from datetime import datetime
+from pathlib import Path
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 # =========================
 # IMPORTS DO PIPELINE
@@ -24,13 +56,22 @@ from src.video_generator.gerador_videos_direto import (
     extrair_markdown_do_pdf,
     gerar_roteiro,
     parsear_cenas_do_roteiro,
-    gerar_video_heygen,
-    aguardar_video,
     verificar_status_video,
     extrair_falas_do_roteiro,
+    gerar_video_heygen,
+    aguardar_video,
     LIMITE_DISCIPLINAS,
     LIMITE_PALAVRAS,
 )
+from src.video_generator.video_generator import gerar_video_com_slides
+
+# Aliases pathlib dos caminhos usados por endpoints "novos" (zip de apostilas,
+# dashboard de cursos) que foram escritos esperando Path em vez de str.
+DATA_PDF      = Path("data/output/workbooks_pdf")
+DATA_VIDEO    = Path("data/output/videos")
+DATA_MARKDOWN = Path("data/output/markdown")
+DATA_JSON     = Path("data/output/json")
+pipeline_lock = threading.Lock()
 
 # =========================
 # PATHS
@@ -601,6 +642,30 @@ def download_apostila():
     return FileResponse(path, media_type="application/pdf", filename=os.path.basename(path))
 
 
+@app.get("/download/apostilas-zip")
+async def download_apostilas_zip():
+    """Empacota todo o conteúdo de workbooks_pdf/aluno em um ZIP e devolve para download."""
+    aluno_dir = DATA_PDF / "aluno"
+    if not aluno_dir.exists():
+        raise HTTPException(404, "Nenhuma apostila gerada ainda.")
+
+    pdfs = sorted(aluno_dir.rglob("*.pdf"))
+    if not pdfs:
+        raise HTTPException(404, "Nenhum PDF encontrado em workbooks_pdf/aluno.")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for pdf in pdfs:
+            zf.write(pdf, pdf.relative_to(aluno_dir))
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="apostilas_aluno.zip"'},
+    )
+
+
 @app.post("/approve")
 def approve():
     if pipeline_state["status"] != "awaiting_approval":
@@ -679,10 +744,23 @@ async def approve_scenes_pipeline(body: dict = {}):
 # ✅ NOVO — lista todos os vídeos prontos
 @app.get("/videos")
 def list_videos():
-    paths = pipeline_state.get("video_paths", {})
-    if not paths:
-        return JSONResponse(status_code=404, content={"error": "Nenhum vídeo encontrado."})
-    return {"videos": list(paths.keys())}
+    """Lista vídeos disponíveis por nome de disciplina."""
+    with pipeline_lock:
+        video_paths = dict(pipeline_state.get("video_paths", {}))
+
+    if video_paths:
+        return {"videos": sorted(video_paths.keys())}
+
+    # Fallback: varre o filesystem (vídeos de sessões anteriores)
+    disciplinas: set[str] = set()
+    data_video_str = str(DATA_VIDEO)
+    for root, _, files in os.walk(data_video_str):
+        if root == data_video_str:
+            continue  # ignora arquivos soltos na raiz
+        for f in files:
+            if f.lower().endswith((".mp4", ".avi", ".mov", ".webm")):
+                disciplinas.add(os.path.basename(root))
+    return {"videos": sorted(disciplinas)}
 
 
 # ✅ NOVO — baixa vídeo por nome da disciplina
@@ -702,6 +780,34 @@ def download_video():
     if not path or not os.path.exists(path):
         return JSONResponse(status_code=404, content={"error": "Vídeo não encontrado."})
     return FileResponse(path, media_type="video/mp4", filename=os.path.basename(path))
+
+
+# ---------------------------------------------------------------------------
+# ── DASHBOARD ───────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+
+@app.get("/cursos")
+async def list_cursos():
+    # gerar_apostilas_por_curso cria: workbooks_pdf/aluno/<curso>/<disciplina>.pdf
+    # Iteramos apenas o subdiretório "aluno" para listar cursos do caderno do aluno.
+    aluno_dir = DATA_PDF / "aluno"
+    if not aluno_dir.exists():
+        return {"cursos": []}
+
+    cursos = []
+    for entry in sorted(aluno_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        apostilas = []
+        for pdf in sorted(entry.glob("*.pdf")):
+            stat = pdf.stat()
+            apostilas.append({
+                "nome":   pdf.name,
+                "data":   datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d"),
+                "status": "gerada",
+            })
+        cursos.append({"nome": entry.name, "pasta": entry.name, "apostilas": apostilas})
+    return {"cursos": cursos}
 
 
 # =============================================================================
@@ -813,58 +919,66 @@ def _gerar_cenas_em_background(job_id: str):
 
 def _gerar_video_em_background(job_id: str):
     """
-    Etapa 7: extrai as falas das disciplinas SELECIONADAS e gera um vídeo
-    por disciplina no HeyGen. Salva os vídeos na pasta do job.
+    Etapa 7: gera o vídeo completo para cada disciplina selecionada — slides
+    (PNG por cena) + avatar HeyGen recortado (tronco pra cima) e posicionado
+    no canto + legenda queimada. Mesmo pipeline usado em test_video_um.py
+    (ver video_generator.gerar_video_com_slides / compor_avatar_slides.py).
     """
     job          = _jobs[job_id]
     heygen_token = os.getenv("HEYGEN_API_KEY")
+    openai_token = os.getenv("OPENAI_API_KEY")
     pasta        = _pasta_job(job_id)
-    pasta_videos = os.path.join(pasta, "videos")
-    os.makedirs(pasta_videos, exist_ok=True)
+    pasta_videos = Path(_pasta_job(job_id)) / "videos"
+    pasta_videos.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Filtra apenas disciplinas selecionadas
-        cenas = job.get("scenes", [])
-        if isinstance(cenas, list):
-            cenas_selecionadas = [d for d in cenas if d.get("selecionada", True)]
-        else:
-            cenas_selecionadas = cenas
-
-        falas_por_disciplina = extrair_falas_do_roteiro(cenas_selecionadas)
-
-        if not falas_por_disciplina:
+        disciplinas = job.get("scenes", [])
+        disciplinas_selecionadas = (
+            [d for d in disciplinas if d.get("selecionada", True)]
+            if isinstance(disciplinas, list) else disciplinas
+        )
+        if not disciplinas_selecionadas:
             raise ValueError(
-                "Nenhuma fala encontrada nas disciplinas selecionadas. "
+                "Nenhuma disciplina selecionada. "
                 "Verifique se as disciplinas estão marcadas e se as falas estão preenchidas."
             )
 
         videos = []
-        for disciplina, fala in falas_por_disciplina.items():
-            video_id = gerar_video_heygen(fala, disciplina, heygen_token)
-            info     = aguardar_video(video_id, heygen_token)
+        for disc in disciplinas_selecionadas:
+            disciplina = disc.get("disciplina", "Disciplina")
+            cenas = [c for c in disc.get("cenas", []) if c.get("fala")]
+            if not cenas:
+                print(f"   [AVISO] Disciplina '{disciplina}' sem falas — pulando")
+                continue
 
-            # Salva o vídeo em disco
-            slug          = re.sub(r"[^\w]", "_", disciplina)[:60]
-            caminho_video = os.path.join(pasta_videos, f"{slug}.mp4")
-            if info.get("video_url"):
-                import requests as req
-                video_bytes = req.get(info["video_url"], timeout=60).content
-                with open(caminho_video, "wb") as f:
-                    f.write(video_bytes)
+            slug             = re.sub(r"[^\w]", "_", disciplina)[:60]
+            pasta_disciplina = pasta_videos / slug
+            pasta_disciplina.mkdir(exist_ok=True)
+            pasta_slides     = pasta_disciplina / "slides"
+
+            caminho_video = str(pasta_videos / f"{slug}.mp4")
+            gerar_video_com_slides(
+                cenas=cenas,
+                disciplina=disciplina,
+                caminho_saida=caminho_video,
+                pasta_slides=str(pasta_slides),
+                heygen_token=heygen_token,
+                openai_token=openai_token,
+            )
 
             videos.append({
                 "disciplina":    disciplina,
-                "video_id":      video_id,
-                "video_url":     info.get("video_url"),
-                "duration":      info.get("duration"),
                 "caminho_local": caminho_video,
             })
 
+        if not videos:
+            raise ValueError("Nenhum vídeo gerado — verifique as falas das disciplinas selecionadas.")
+
         _jobs[job_id].update({
-            "state":   "completed",
-            "videos":  videos,
-            "video_url": videos[0]["video_url"] if videos else None,
-            "duration":  videos[0]["duration"]  if videos else None,
+            "state":     "completed",
+            "videos":    videos,
+            "video_url": None,
+            "duration":  None,
         })
         salvar_job(job_id)
 

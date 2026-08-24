@@ -6,8 +6,10 @@ from openai import OpenAI
 def gerar_roteiro(texto, disciplina, token):
     client = OpenAI(api_key=token)
     modelo = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    nome_avatar = os.getenv("AVATAR_NOME", "Marina")
 
     prompt = f"""Você é um roteirista especialista em vídeo-aulas técnicas para a disciplina de {disciplina}.
+O avatar que apresenta o vídeo se chama {nome_avatar}. Use esse nome nas falas de apresentação e despedida.
 Seu objetivo é criar roteiros de vídeo-aula inaugurais altamente engajadores,
 seguindo rigorosamente um formato padronizado com blocos, timecodes e marcações de produção.
 
@@ -91,7 +93,7 @@ Bloco 4: Call to Action (CTA) e Encerramento (4:30 - 5:00)
 
 [VISUAL/B-ROLL] (Logo da Escola Técnica San Marino brilhando com uma transição suave para o escuro. Fim do vídeo.)
 
-Notas Estratégicas da Marina para a Diretoria:
+Notas Estratégicas de {nome_avatar} para a Diretoria:
 1. Redução de Carga Cognitiva: [Breve justificativa das escolhas pedagógicas do roteiro]
 2. Alinhamento com o Interesse 2: [Como este roteiro apoia o engajamento com o formato híbrido]
 3. Padronização Editorial: [Lembrete de que este roteiro serve de template para outras disciplinas]
@@ -99,7 +101,7 @@ Notas Estratégicas da Marina para a Diretoria:
 
 **Conteúdo da disciplina para basear o roteiro:**
 
-{texto[:2000]}
+{texto[:8000]}
 """
 
     for tentativa in range(3):
@@ -108,7 +110,7 @@ Notas Estratégicas da Marina para a Diretoria:
                 model=modelo,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=4000,
             )
             return resposta.choices[0].message.content
         except Exception as e:

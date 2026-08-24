@@ -12,6 +12,9 @@ Em cada etapa de aprovação, o usuário pode editar o conteúdo gerado antes de
 
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 import uuid
 import requests
@@ -29,9 +32,19 @@ LIMITE_PALAVRAS_MD  = None  # None = usa o markdown completo como contexto
 HEYGEN_BASE_URL       = "https://api.heygen.com"
 HEYGEN_ASPECT_RATIO   = "16:9"
 HEYGEN_ENGINE         = "avatar_iv"       # "avatar_iv" (padrão) | "avatar_v" (melhor qualidade)
-HEYGEN_SPEED          = 1.0               # 0.5–2.0 — testar 0.9 se parecer acelerado
-HEYGEN_EXPRESSIVENESS = "medium"          # "low" | "medium" | "high"
-HEYGEN_MOTION_PROMPT  = "calm, professional, occasional hand gestures while teaching"
+HEYGEN_SPEED = float(os.getenv("HEYGEN_SPEED", "1.0"))              # 0.5–2.0
+HEYGEN_EXPRESSIVENESS = os.getenv("HEYGEN_EXPRESSIVENESS", "high")   # "low" | "medium" | "high"
+HEYGEN_MOTION_PROMPT  = os.getenv("HEYGEN_MOTION_PROMPT", (
+    "warm, confident instructor with natural human body language: "
+    "uses both hands expressively and fluidly to emphasize key points, "
+    "open-palm gestures while explaining concepts, occasional finger-counting "
+    "when listing items, subtle shifts in posture and weight between sentences, "
+    "natural head tilts and nods on important words, expressive eyebrows and "
+    "genuine smiles, brief thoughtful pauses with eyes slightly raised before "
+    "continuing, frequent natural eye contact with the camera, relaxed shoulders, "
+    "varied gesture timing and amplitude so the movement never feels repetitive "
+    "or robotic — like a real teacher speaking spontaneously"
+))
 # Background: prioridade → asset_id (HeyGen) > URL pública > cor sólida
 # Rodar scripts/upload_background_heygen.py uma vez para gerar HEYGEN_BG_ASSET_ID
 # FEATURE FUTURA: permitir o usuário fazer upload do próprio background na UI
@@ -190,22 +203,25 @@ DISCIPLINA: [nome completo da disciplina]
 ---
 
 [CENA 1 — ABERTURA]
+[TIPO] intro
 [PRODUCAO] Direção de expressão e postura do avatar (ex: "Sorrindo, olhar confiante para a câmera, tom acolhedor")
 [ANGULO] Sugestão de enquadramento (ex: "Plano médio, avatar centralizado")
 [TEXTO NA TELA] Texto curto para exibir na tela (máx. 6 palavras)
-[FALA] Texto exato que o avatar vai falar nesta cena
+[FALA] Texto exato que o avatar vai falar — saudação calorosa, apresenta o avatar pelo nome, diz o nome da disciplina e anuncia os tópicos que serão abordados nesta aula
 
 [CENA 2 — DESENVOLVIMENTO]
+[TIPO] conteudo
 [PRODUCAO] ...
 [ANGULO] ...
 [TEXTO NA TELA] ...
 [FALA] ...
 
 [CENA 3 — ENCERRAMENTO]
+[TIPO] outro
 [PRODUCAO] ...
 [ANGULO] ...
 [TEXTO NA TELA] ...
-[FALA] ...
+[FALA] Texto exato que o avatar vai falar — resume os principais pontos da aula e se despede com algo como "Te vejo na próxima aula!"
 
 ---
 DISCIPLINA: [próxima disciplina]
@@ -213,9 +229,12 @@ DISCIPLINA: [próxima disciplina]
 ... (repete o formato)
 
 REGRAS:
-- Crie entre 3 e 5 cenas por disciplina
+- 5 a 25 cenas, cada uma com fala de 120-180 palavras
+- A PRIMEIRA cena SEMPRE recebe [TIPO] intro — o avatar aparece em tela cheia, se apresenta e anuncia o conteúdo
+- As cenas de DESENVOLVIMENTO recebem [TIPO] conteudo — narração sobre slides, sem avatar em tela
+- A ÚLTIMA cena SEMPRE recebe [TIPO] outro — o avatar volta em tela cheia para resumir e se despedir
 - [FALA] deve ser fluido, natural, sem marcações — é o texto exato para TTS
-- [PRODUCAO] guia o avatar (expressividade, gestos, emoção)
+- [PRODUCAO] guia o avatar (expressividade, gestos, emoção) — relevante apenas para cenas intro e outro
 - [ANGULO] é sugestão para edição posterior (não afeta o HeyGen diretamente)
 - [TEXTO NA TELA] são palavras-chave impactantes para sobrepor no vídeo
 - Tom geral: acolhedor, empolgante, profissional
@@ -342,16 +361,19 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
             nome_cena = re.sub(r'\([\d:]+\s*-\s*[\d:]+\)', '', nome_cena).strip()
             numero = len(cenas_atuais) + 1
             cena_atual = {
-                "numero":       numero,
-                "nome":         nome_cena,
-                "producao":     "",
-                "angulo":       "",
+                "numero":        numero,
+                "nome":          nome_cena,
+                "tipo":          "",   # "intro" | "conteudo" | "outro"
+                "producao":      "",
+                "angulo":        "",
                 "texto_na_tela": "",
-                "fala":         "",
+                "fala":          "",
             }
 
         elif cena_atual is not None:
-            if ls.startswith("[PRODUCAO]") or ls.startswith("[PRODUCÃO]"):
+            if ls.startswith("[TIPO]"):
+                cena_atual["tipo"] = ls.split("]", 1)[-1].strip().lower()
+            elif ls.startswith("[PRODUCAO]") or ls.startswith("[PRODUCÃO]"):
                 cena_atual["producao"] = ls.split("]", 1)[-1].strip()
             elif ls.startswith("[ANGULO]") or ls.startswith("[ÂNGULO]"):
                 cena_atual["angulo"] = ls.split("]", 1)[-1].strip()
@@ -364,6 +386,21 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
                 cena_atual["fala"] += " " + ls
 
     _salvar_disciplina()
+
+    # Fallback inteligente: se o modelo não gerou [TIPO], inferir pela posição na lista
+    for disc in disciplinas:
+        cenas = disc.get("cenas", [])
+        if not cenas:
+            continue
+        for i, cena in enumerate(cenas):
+            if not cena.get("tipo"):
+                if i == 0:
+                    cena["tipo"] = "intro"
+                elif i == len(cenas) - 1:
+                    cena["tipo"] = "outro"
+                else:
+                    cena["tipo"] = "conteudo"
+
     return disciplinas
 
 
@@ -372,18 +409,19 @@ def parsear_cenas_do_roteiro(roteiro: str) -> list[dict]:
 # =============================================================================
 
 def gerar_video_heygen(
-    roteiro:      str,
+    fala:         str,
     disciplina:   str,
     heygen_token: str,
     avatar_id:    str | None = None,
     voice_id:     str | None = None,
+    motion_prompt: str | None = None
 ) -> str:
     """
-    Envia o roteiro aprovado para HeyGen v3 e retorna o video_id.
+    Envia uma fala para HeyGen v3 e retorna o video_id.
+    Para múltiplas cenas com slides, use gerar_video_v3_multicena.
     """
     avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID")
     voice_id  = voice_id  or os.getenv("HEYGEN_VOICE_ID")
-
     if not avatar_id:
         raise ValueError("HEYGEN_AVATAR_ID não configurado.")
     if not voice_id:
@@ -394,25 +432,24 @@ def gerar_video_heygen(
         "Content-Type":   "application/json",
         "Idempotency-Key": str(uuid.uuid4()),
     }
-
     payload = {
-        "type":         "avatar",
-        "avatar_id":    avatar_id,
-        "voice_id":     voice_id,
-        "script":       roteiro if not LIMITE_PALAVRAS else _truncar_palavras(roteiro, LIMITE_PALAVRAS),
-        "title":        f"Introdução — {disciplina}",
-        "aspect_ratio": HEYGEN_ASPECT_RATIO,
-        "fit":          "contain",
-        "engine":       {"type": HEYGEN_ENGINE},
-        "voice_settings": {"speed": HEYGEN_SPEED},
+        "type":          "avatar",
+        "avatar_id":     avatar_id,
+        "voice_id":      voice_id,
+        "script":        fala if not LIMITE_PALAVRAS else _truncar_palavras(fala, LIMITE_PALAVRAS),
+        "title":         disciplina,
+        "aspect_ratio":  HEYGEN_ASPECT_RATIO,
+        "voice_settings": {
+            "speed": HEYGEN_SPEED,
+            "locale":os.getenv("HEYGEN_VOICE_LOCALE","pt-BR")},
+        "motion_prompt": motion_prompt or HEYGEN_MOTION_PROMPT,
         "expressiveness": HEYGEN_EXPRESSIVENESS,
-        "motion_prompt":  HEYGEN_MOTION_PROMPT,
-        "background": (
+        "engine":        {"type": HEYGEN_ENGINE},
+        "background":    (
             {"type": "image", "asset_id": HEYGEN_BG_ASSET_ID}
             if HEYGEN_BG_ASSET_ID
             else {"type": "color", "value": HEYGEN_BG_COLOR}
         ),
-        "caption": {"style": "default"},
     }
 
     resp = requests.post(
@@ -421,18 +458,137 @@ def gerar_video_heygen(
         json=payload,
         timeout=30,
     )
-
     if not resp.ok:
         raise RuntimeError(
             f"HeyGen /v3/videos falhou: HTTP {resp.status_code} — {resp.text[:300]}"
         )
 
-    data     = resp.json().get("data", {})
-    video_id = data.get("video_id")
+    video_id = resp.json().get("data", {}).get("video_id")
     if not video_id:
         raise RuntimeError(f"HeyGen não retornou video_id: {resp.text[:300]}")
-
     return video_id
+
+
+def gerar_video_v3_multicena(
+    cenas_com_slides: list[dict],
+    disciplina:       str,
+    heygen_token:     str,
+    avatar_id:        str | None = None,
+    voice_id:         str | None = None,
+    pasta_temp:       str | None = None,
+) -> str:
+    """
+    Processa múltiplas cenas com slides via HeyGen v3, baixa cada vídeo
+    e os concatena com ffmpeg. Retorna o caminho do vídeo final.
+
+    cenas_com_slides: [{"fala": "...", "asset_id": "..."}, ...]
+    """
+    avatar_id  = avatar_id  or os.getenv("HEYGEN_AVATAR_ID")
+    voice_id   = voice_id   or os.getenv("HEYGEN_VOICE_ID")
+    pasta_temp = pasta_temp or tempfile.mkdtemp(prefix="heygen_v3_")
+
+    if not avatar_id:
+        raise ValueError("HEYGEN_AVATAR_ID não configurado.")
+    if not voice_id:
+        raise ValueError("HEYGEN_VOICE_ID não configurado.")
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg não encontrado no PATH.")
+
+    os.makedirs(pasta_temp, exist_ok=True)
+    caminhos_cena: list[str] = []
+    total = len(cenas_com_slides)
+
+    for i, cena in enumerate(cenas_com_slides, 1):
+        fala     = cena["fala"].strip()
+        asset_id = cena.get("asset_id")
+        if not fala:
+            print(f"   ⚠️ Cena {i}/{total} sem fala — pulando")
+            continue
+
+        print(f"   📹 Cena {i}/{total} — {len(fala)} chars de fala")
+        bg = (
+            {"type": "image", "asset_id": asset_id}
+            if asset_id
+            else {"type": "color", "value": HEYGEN_BG_COLOR}
+        )
+
+        headers = {
+            "X-Api-Key":       heygen_token,
+            "Content-Type":    "application/json",
+            "Idempotency-Key": str(uuid.uuid4()),
+        }
+        payload = {
+            "type":           "avatar",
+            "avatar_id":      avatar_id,
+            "voice_id":       voice_id,
+            "script":         fala if not LIMITE_PALAVRAS else _truncar_palavras(fala, LIMITE_PALAVRAS),
+            "title":          f"{disciplina} — Cena {i}/{total}",
+            "aspect_ratio":   HEYGEN_ASPECT_RATIO,
+            "voice_settings": {
+            "speed": HEYGEN_SPEED,
+            "locale":os.getenv("HEYGEN_VOICE_LOCALE","pt-BR")},
+            "motion_prompt": cena.get("motion_prompt") or HEYGEN_MOTION_PROMPT,
+            "expressiveness": cena.get("expressiveness") or HEYGEN_EXPRESSIVENESS,
+            "engine":         {"type": HEYGEN_ENGINE},
+            "background":     bg,
+        }
+
+        resp = requests.post(
+            f"{HEYGEN_BASE_URL}/v3/videos",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        if not resp.ok:
+            raise RuntimeError(f"HeyGen cena {i}: HTTP {resp.status_code} — {resp.text[:300]}")
+
+        video_id = resp.json().get("data", {}).get("video_id")
+        if not video_id:
+            raise RuntimeError(f"Sem video_id na cena {i}: {resp.text[:300]}")
+
+        print(f"      video_id: {video_id}")
+        info = aguardar_video(video_id, heygen_token, max_min=5.0)
+        if not info.get("video_url"):
+            raise RuntimeError(f"Sem video_url na cena {i}")
+
+        cp = os.path.abspath(os.path.join(pasta_temp, f"cena_{i:03d}.mp4"))
+        r = requests.get(info["video_url"], timeout=120)
+        r.raise_for_status()
+        with open(cp, "wb") as f:
+            f.write(r.content)
+        print(f"      ✅ {os.path.getsize(cp) // 1024} KB")
+        caminhos_cena.append(cp)
+
+    if not caminhos_cena:
+        raise RuntimeError("Nenhuma cena gerada.")
+    if len(caminhos_cena) == 1:
+        return caminhos_cena[0]
+
+    lista = os.path.abspath(os.path.join(pasta_temp, "concat.txt"))
+    final = os.path.abspath(os.path.join(
+        pasta_temp,
+        f"{re.sub(r'[^\w\-]', '_', disciplina)}_final.mp4",
+    ))
+    with open(lista, "w", encoding="utf-8") as f:
+        for c in caminhos_cena:
+            f.write(f"file '{c.replace(chr(92), '/')}'\n")
+
+    print(f"   🔗 Concatenando {len(caminhos_cena)} vídeos...")
+    r = subprocess.run(
+        ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", final, "-y"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+    )
+    if r.returncode != 0:
+        r = subprocess.run(
+            ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista,
+             "-c:v", "libx264", "-c:a", "aac", final, "-y"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"ffmpeg falhou: {r.stderr[:300]}")
+
+    print(f"   ✅ Final: {final} ({os.path.getsize(final) / 1024 / 1024:.1f} MB)")
+    return final
 
 
 def verificar_status_video(video_id: str, heygen_token: str) -> dict:
@@ -440,7 +596,7 @@ def verificar_status_video(video_id: str, heygen_token: str) -> dict:
     resp = requests.get(
         f"{HEYGEN_BASE_URL}/v3/videos/{video_id}",
         headers={"X-Api-Key": heygen_token},
-        timeout=15,
+        timeout=30,
     )
     if not resp.ok:
         raise RuntimeError(f"GET /v3/videos/{video_id}: HTTP {resp.status_code}")
@@ -458,17 +614,304 @@ def verificar_status_video(video_id: str, heygen_token: str) -> dict:
     }
 
 
-def aguardar_video(video_id: str, heygen_token: str, max_min: int = 10) -> dict:
-    """Polling até completed/failed. Aguarda até max_min minutos."""
-    tentativas = (max_min * 60) // 10
+def aguardar_video(video_id: str, heygen_token: str, max_min: int = 1.0) -> dict:
+    """
+    Polling até completed/failed. Aguarda até max_min minutos.
+
+    Falhas de rede transitórias (timeout, conexão caindo) ao consultar o
+    status NÃO interrompem a espera — HeyGen pode ficar minutos processando,
+    e um hiccup isolado de rede não deve derrubar o pipeline inteiro.
+    """
+    tentativas = int((max_min * 60) // 10)
     for _ in range(tentativas):
-        info = verificar_status_video(video_id, heygen_token)
+        try:
+            info = verificar_status_video(video_id, heygen_token)
+        except requests.exceptions.RequestException as e:
+            print(f"      ⚠️ Falha de rede ao consultar status do vídeo ({e}) — tentando de novo em 10s...")
+            time.sleep(10)
+            continue
         if info["status"] == "completed":
             return info
         if info["status"] == "failed":
-            raise RuntimeError(f"HeyGen falhou: {info.get('error')}")
+            raise RuntimeError(f"HeyGen falhou. Resposta completa: {info}")
         time.sleep(10)
     raise TimeoutError(f"Vídeo não ficou pronto em {max_min} minutos.")
+
+
+def _upload_slide_heygen(caminho_slide: str, heygen_token: str) -> str:
+    """
+    Faz upload de um slide PNG para o HeyGen e retorna o asset_id.
+    Usado como background image em cada cena do vídeo.
+    """
+    nome_arquivo = os.path.basename(caminho_slide)
+    with open(caminho_slide, "rb") as f:
+        resp = requests.post(
+            f"{HEYGEN_BASE_URL}/v3/assets",
+            headers={"X-Api-Key": heygen_token},
+            files={"file": (nome_arquivo, f, "image/png")},
+            timeout=60,
+        )
+    if not resp.ok:
+        raise RuntimeError(
+            f"Upload slide falhou ({nome_arquivo}): "
+            f"HTTP {resp.status_code} — {resp.text[:300]}"
+        )
+    data = resp.json().get("data", {})
+    asset_id = data.get("asset_id")
+    if not asset_id:
+        raise RuntimeError(f"HeyGen não retornou asset_id: {resp.text[:300]}")
+    return asset_id
+
+
+def _enviar_video_generate_com_retry(headers: dict, payload: dict, max_espera_min: int = 10):
+    """
+    POST /v2/video/generate com retry específico para o erro
+    'Avatar ... is still processing' (avatar customizado ainda em criação no HeyGen).
+    Outros erros HTTP são propagados imediatamente.
+    """
+    tentativas = max(1, (max_espera_min * 60) // 20)
+    for tentativa in range(tentativas):
+        resp = requests.post(
+            f"{HEYGEN_BASE_URL}/v2/video/generate",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        if resp.ok:
+            return resp
+        if resp.status_code == 400 and "still processing" in resp.text.lower():
+            print(
+                f"   [AVISO] Avatar ainda em processamento no HeyGen. "
+                f"Aguardando 20s antes de tentar novamente... ({tentativa + 1}/{tentativas})"
+            )
+            time.sleep(20)
+            continue
+        raise RuntimeError(
+            f"HeyGen /v2/video/generate falhou: "
+            f"HTTP {resp.status_code} — {resp.text[:300]}"
+        )
+
+    raise RuntimeError(
+        f"Avatar ainda em processamento no HeyGen após {max_espera_min} min de espera. "
+        "Aguarde a criação do avatar terminar (verifique no painel HeyGen) e tente novamente."
+    )
+
+
+def gerar_video_heygen_scenes(
+    cenas: list[dict],
+    disciplina: str,
+    heygen_token: str,
+    avatar_id: str | None = None,
+    voice_id: str | None = None,
+    
+) -> str:
+    """
+    Cria vídeo multi-cenas no HeyGen (v2 Studio API).
+    Cada cena = slide de fundo + avatar à direita + fala.
+
+    cenas: [{"fala": "...", "asset_id": "..."}, ...]
+    """
+    avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID")
+    voice_id = voice_id or os.getenv("HEYGEN_VOICE_ID")
+
+    if not avatar_id:
+        raise ValueError("HEYGEN_AVATAR_ID não configurado.")
+    if not voice_id:
+        raise ValueError("HEYGEN_VOICE_ID não configurado.")
+
+    video_inputs = []
+    for cena in cenas:
+        fala = cena["fala"]
+        if LIMITE_PALAVRAS:
+            fala = _truncar_palavras(fala, LIMITE_PALAVRAS)
+
+        scene = {
+            "character": {
+                "type": "avatar",
+                "avatar_id": avatar_id,
+                "avatar_style": "normal",
+                "motion_prompt": cena.get("motion_prompt") or HEYGEN_MOTION_PROMPT,
+                "expressiveness": cena.get("expressiveness") or HEYGEN_EXPRESSIVENESS,
+            },
+            "voice": {
+                "type": "text",
+                "voice_id": voice_id,
+                "input_text": fala,
+                "speed": HEYGEN_SPEED,
+                "locale":os.getenv("HEYGEN_VOICE_LOCALE","pt-BR")
+            },
+        }
+
+        if cena.get("asset_id"):
+            scene["background"] = {
+                "type": "image",
+                "image_asset_id": cena["asset_id"],
+            }
+        else:
+            scene["background"] = {
+                "type": "color",
+                "value": HEYGEN_BG_COLOR,
+            }
+
+        video_inputs.append(scene)
+
+    headers = {
+        "X-Api-Key": heygen_token,
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "video_inputs": video_inputs,
+        "title": f"Introdução — {disciplina}",
+        "dimension": {"width": 1280, "height": 720},
+        "caption": False,
+    }
+
+    resp = _enviar_video_generate_com_retry(headers, payload)
+
+    data = resp.json().get("data", {})
+    video_id = data.get("video_id")
+    if not video_id:
+        raise RuntimeError(f"HeyGen não retornou video_id: {resp.text[:300]}")
+
+    return video_id
+
+
+# =============================================================================
+# ETAPA 4b — CENAS APROVADAS → VÍDEO VIA TEMPLATE (Studio Avatar com gestos)
+# =============================================================================
+
+def _detectar_var_texto(template_id: str, heygen_token: str) -> str:
+    """
+    Consulta o template e retorna o nome da primeira variável de texto encontrada.
+    Fallback: env HEYGEN_SCENE_VAR ou 'script'.
+    """
+    fallback = os.getenv("HEYGEN_SCENE_VAR", "script")
+    try:
+        resp = requests.get(
+            f"{HEYGEN_BASE_URL}/v2/template/{template_id}",
+            headers={"X-Api-Key": heygen_token},
+            timeout=15,
+        )
+        if not resp.ok:
+            return fallback
+        variables = resp.json().get("data", {}).get("variables", {})
+        for name, var in variables.items():
+            if var.get("type") == "text":
+                print(f"   ℹ️  Variável de texto do template detectada: '{name}'")
+                return name
+    except Exception:
+        pass
+    return fallback
+
+
+def gerar_video_template_multicena(
+    cenas_com_slides: list[dict],
+    disciplina:       str,
+    heygen_token:     str,
+    template_id:      str,
+    pasta_temp:       str | None = None,
+) -> str:
+    """
+    Gera um vídeo por cena usando um template HeyGen (Studio Avatar com gestos).
+    O layout/background/avatar vêm da cena — apenas o texto varia por chamada.
+    Concatena os vídeos individuais com ffmpeg.
+
+    cenas_com_slides: [{"fala": "..."}, ...]  (asset_id ignorado — template define o visual)
+    """
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg não encontrado no PATH.")
+
+    pasta_temp = pasta_temp or tempfile.mkdtemp(prefix="heygen_tmpl_")
+    os.makedirs(pasta_temp, exist_ok=True)
+
+    var_nome = _detectar_var_texto(template_id, heygen_token)
+    headers  = {"X-Api-Key": heygen_token, "Content-Type": "application/json"}
+
+    caminhos_cena: list[str] = []
+    total = len(cenas_com_slides)
+
+    for i, cena in enumerate(cenas_com_slides, 1):
+        fala = cena["fala"].strip()
+        if not fala:
+            print(f"   ⚠️ Cena {i}/{total} sem fala — pulando")
+            continue
+
+        print(f"   📹 Cena {i}/{total} — {len(fala)} chars de fala")
+
+        payload = {
+            "test":    False,
+            "caption": False,
+            "title":   f"{disciplina} — Cena {i}/{total}",
+            "variables": {
+                var_nome: {
+                    "name":       var_nome,
+                    "type":       "text",
+                    "properties": {
+                        "content": fala if not LIMITE_PALAVRAS else _truncar_palavras(fala, LIMITE_PALAVRAS),
+                    },
+                }
+            },
+        }
+
+        resp = requests.post(
+            f"{HEYGEN_BASE_URL}/v2/template/{template_id}/generate",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        if not resp.ok:
+            raise RuntimeError(
+                f"HeyGen template cena {i}: HTTP {resp.status_code} — {resp.text[:300]}"
+            )
+
+        video_id = resp.json().get("data", {}).get("video_id")
+        if not video_id:
+            raise RuntimeError(f"Sem video_id na cena {i}: {resp.text[:300]}")
+
+        print(f"      video_id: {video_id}")
+        info = aguardar_video(video_id, heygen_token, max_min=5.0)
+        if not info.get("video_url"):
+            raise RuntimeError(f"Sem video_url na cena {i}")
+
+        cp = os.path.join(pasta_temp, f"cena_{i:03d}.mp4")
+        r = requests.get(info["video_url"], timeout=120)
+        r.raise_for_status()
+        with open(cp, "wb") as f:
+            f.write(r.content)
+        print(f"      ✅ {os.path.getsize(cp) // 1024} KB")
+        caminhos_cena.append(cp)
+
+    if not caminhos_cena:
+        raise RuntimeError("Nenhuma cena gerada.")
+    if len(caminhos_cena) == 1:
+        return caminhos_cena[0]
+
+    lista = os.path.join(pasta_temp, "concat.txt")
+    final = os.path.join(
+        pasta_temp,
+        f"{re.sub(r'[^\w\-]', '_', disciplina)}_final.mp4",
+    )
+    with open(lista, "w") as f:
+        for c in caminhos_cena:
+            f.write(f"file '{c}'\n")
+
+    print(f"   🔗 Concatenando {len(caminhos_cena)} vídeos...")
+    r = subprocess.run(
+        ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", final, "-y"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+    )
+    if r.returncode != 0:
+        r = subprocess.run(
+            ["ffmpeg", "-f", "concat", "-safe", "0", "-i", lista,
+             "-c:v", "libx264", "-c:a", "aac", final, "-y"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"ffmpeg falhou: {r.stderr[:300]}")
+
+    print(f"   ✅ Final: {final} ({os.path.getsize(final) / 1024 / 1024:.1f} MB)")
+    return final
 
 
 # =============================================================================
